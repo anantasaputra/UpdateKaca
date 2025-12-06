@@ -69,4 +69,16 @@
         </div>
     </div>
 </div>
+
+<style>
+/* Karakter Kiri - di pojok kiri atas card pertama */
+.help-card:first-child::before {
+    background-image: url('{{ asset("images/character-left-head.png") }}') !important;
+}
+
+/* Karakter Kanan - di pojok kanan atas card terakhir */
+.help-card:last-child::after {
+    background-image: url('{{ asset("images/character-right-head.png") }}') !important;
+}
+</style>
 @endsection

@@ -39,7 +39,10 @@
             </div>
         </form>
 
+        
         <hr>
+
+
 
         <h2>Delete Account</h2>
         <form method="POST" action="{{ route('profile.destroy') }}" class="delete-form">
