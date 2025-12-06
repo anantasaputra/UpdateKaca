@@ -100,7 +100,8 @@ body {
     font-weight: 500;
     padding: 0.5rem 1rem;
     border-radius: var(--radius-sm);
-    transition: var(--transition);}
+    transition: var(--transition);
+}
 
 .nav-link:hover,
 .nav-link.active {
@@ -307,6 +308,7 @@ body {
 .cta-characters {
     display: flex;
     justify-content: center;
+    gap: 1rem;
     align-items: flex-start;
     padding: 3rem 2rem;
     height: 100%;
@@ -1350,4 +1352,47 @@ body {
     .photos-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* === PHOTOBOOTH PAGE ENHANCEMENTS === */
+.photobooth-page .page-title {
+    font-size: 2.5rem;
+    text-align: center;
+    color: var(--color-primary);
+    margin-bottom: 2rem;
+    font-weight: 700;
+}
+
+.photobooth-controls {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+    flex-wrap: wrap;
+}
+
+.photobooth-controls .dropdown-toggle {
+    min-width: 200px;
+    cursor: pointer;
+}
+
+.thumbnail-item {
+    position: relative;
+}
+
+.thumbnail-number {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    box-shadow: var(--shadow-sm);
 }

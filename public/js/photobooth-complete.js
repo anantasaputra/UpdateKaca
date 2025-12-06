@@ -1,534 +1,324 @@
-/**
- * BINGKIS KACA - COMPLETE PHOTOBOOTH SYSTEM
- * With Camera Selection, Timer, Multi-Photo, and Review Modal
- */
+// PhotoBooth Application
+class PhotoBoothApp {
+    constructor() {
+        this.video = document.getElementById('cameraVideo');
+        this.canvas = document.getElementById('cameraCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.photos = [];
+        this.currentPhotoCount = 4;
+        this.currentCamera = null;
+        this.timerDuration = 3;
+        this.isCapturing = false;
+        this.selectedColor = 'brown';
+        this.frameType = 'frame4';
 
-(function () {
-    'use strict';
+        this.init();
+    }
 
-    console.log('Complete Photobooth System Initialized');
+    init() {
+        this.setupCameraList();
+        this.setupEventListeners();
+    }
 
-    // =========================
-    // State Management
-    // =========================
-    const state = {
-        stream: null,
-        selectedFrame: null,
-        photoCount: 4,
-        timerSeconds: 3,
-        capturedPhotos: [],
-        isCapturing: false,
-        currentPhotoIndex: 0,
-        videoDevices: [],
-        currentDeviceId: null,
-    };
+    async setupCameraList() {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            
+            const select = document.getElementById('cameraSelect');
+            select.innerHTML = '';
+            
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${index + 1}`;
+                select.appendChild(option);
+            });
 
-    // =========================
-    // DOM Elements
-    // =========================
-    const elements = {
-        // Controls
-        cameraSelect: document.getElementById('cameraSelect'),
-        photoCountSelect: document.getElementById('photoCountSelect'),
-        timerSelect: document.getElementById('timerSelect'),
+            if (videoDevices.length > 0) {
+                this.currentCamera = videoDevices[0].deviceId;
+                this.startCamera();
+            }
+        } catch (error) {
+            console.error('Error getting cameras:', error);
+        }
+    }
 
-        // Camera
-        video: document.getElementById('cameraVideo'),
-        canvas: document.getElementById('cameraCanvas'),
-        frameOverlay: document.getElementById('frameOverlay'),
-        countdownOverlay: document.getElementById('countdownOverlay'),
-        countdownNumber: document.getElementById('countdownNumber'),
-        flashEffect: document.getElementById('flashEffect'),
+    async startCamera() {
+        try {
+            if (this.video.srcObject) {
+                this.video.srcObject.getTracks().forEach(track => track.stop());
+            }
 
-        // Actions
-        startPhotoBtn: document.getElementById('startPhotoBtn'),
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    deviceId: this.currentCamera ? { exact: this.currentCamera } : undefined,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            });
 
-        // Thumbnails / Progress
-        thumbnailContainer: document.getElementById('thumbnailContainer'),
-        progressText: document.getElementById('progressText'),
-        progressFill: document.getElementById('progressFill'),
+            this.video.srcObject = stream;
+        } catch (error) {
+            console.error('Error starting camera:', error);
+            alert('Tidak dapat mengakses kamera. Pastikan Anda memberikan izin akses kamera.');
+        }
+    }
 
-        // Review Modal
-        reviewModal: document.getElementById('reviewModal'),
-        stripCanvas: document.getElementById('stripCanvas'),
-        frameOptions: document.getElementById('frameOptions'),
-        downloadBtn: document.getElementById('downloadBtn'),
-        retakeBtn: document.getElementById('retakeBtn'),
-        saveBtn: document.getElementById('saveBtn'), // optional if guest
-    };
+    setupEventListeners() {
+        // Camera selection
+        document.getElementById('cameraSelect').addEventListener('change', (e) => {
+            this.currentCamera = e.target.value;
+            this.startCamera();
+        });
 
-    // =========================
-    // Initialization
-    // =========================
+        // Photo count selection
+        document.getElementById('photoCountSelect').addEventListener('change', (e) => {
+            this.currentPhotoCount = parseInt(e.target.value);
+            this.frameType = `frame${this.currentPhotoCount}`;
+            this.updateProgress();
+        });
 
-    function init() {
-        console.log('Initializing...');
+        // Timer selection
+        document.getElementById('timerSelect').addEventListener('change', (e) => {
+            this.timerDuration = parseInt(e.target.value);
+        });
 
-        if (!checkElements()) {
-            console.error('Some elements missing!');
+        // Start photo button
+        document.getElementById('startPhotoBtn').addEventListener('click', () => {
+            this.startPhotoSession();
+        });
+
+        // Review modal buttons
+        document.getElementById('backBtn').addEventListener('click', () => {
+            this.closeReviewModal();
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            this.downloadPhotoStrip();
+        });
+
+        document.getElementById('retakeBtn').addEventListener('click', () => {
+            this.retakePhotos();
+        });
+
+        // Color selector
+        const colorButtons = document.querySelectorAll('.color-btn');
+        colorButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                colorButtons.forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.selectedColor = e.target.dataset.color;
+                this.updateStripPreview();
+            });
+        });
+    }
+
+    async startPhotoSession() {
+        if (this.isCapturing) return;
+
+        this.photos = [];
+        this.isCapturing = true;
+        this.updateThumbnails();
+        this.updateProgress();
+
+        const btn = document.getElementById('startPhotoBtn');
+        btn.disabled = true;
+
+        for (let i = 0; i < this.currentPhotoCount; i++) {
+            await this.capturePhoto(i + 1);
+            await this.wait(1000);
+        }
+
+        this.isCapturing = false;
+        btn.disabled = false;
+        this.showReviewModal();
+    }
+
+    async capturePhoto(photoNumber) {
+        if (this.timerDuration > 0) {
+            await this.showCountdown();
+        }
+
+        // Flash effect
+        const flash = document.getElementById('flashEffect');
+        flash.style.display = 'block';
+        setTimeout(() => {
+            flash.style.display = 'none';
+        }, 300);
+
+        // Capture photo
+        this.canvas.width = this.video.videoWidth;
+        this.canvas.height = this.video.videoHeight;
+        this.ctx.drawImage(this.video, 0, 0);
+        
+        const photoData = this.canvas.toDataURL('image/png');
+        this.photos.push(photoData);
+
+        this.updateThumbnails();
+        this.updateProgress();
+    }
+
+    async showCountdown() {
+        const overlay = document.getElementById('countdownOverlay');
+        const number = document.getElementById('countdownNumber');
+        
+        overlay.style.display = 'flex';
+
+        for (let i = this.timerDuration; i > 0; i--) {
+            number.textContent = i;
+            number.style.animation = 'none';
+            setTimeout(() => {
+                number.style.animation = 'countdownPulse 1s ease-in-out';
+            }, 10);
+            await this.wait(1000);
+        }
+
+        overlay.style.display = 'none';
+    }
+
+    updateThumbnails() {
+        const container = document.getElementById('thumbnailContainer');
+        container.innerHTML = '';
+
+        if (this.photos.length === 0) {
+            container.innerHTML = '<div class="thumbnail-empty">Foto akan muncul di sini</div>';
             return;
         }
 
-        setupEventListeners();
-        initializeCamera();
-        updateProgress();
-    }
-
-    function checkElements() {
-        for (const [key, element] of Object.entries(elements)) {
-            // saveBtn boleh tidak ada untuk guest user
-            if (!element && key !== 'saveBtn') {
-                console.error(`Missing element: ${key}`);
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // =========================
-    // Event Listeners
-    // =========================
-
-    function setupEventListeners() {
-        // Controls
-        if (elements.photoCountSelect) {
-            elements.photoCountSelect.addEventListener('change', e => {
-                state.photoCount = parseInt(e.target.value, 10);
-                updateProgress();
-            });
-        }
-
-        if (elements.timerSelect) {
-            elements.timerSelect.addEventListener('change', e => {
-                state.timerSeconds = parseInt(e.target.value, 10);
-            });
-        }
-
-        if (elements.cameraSelect) {
-            elements.cameraSelect.addEventListener('change', e => {
-                state.currentDeviceId = e.target.value;
-                startCamera();
-            });
-        }
-
-        // Actions
-        if (elements.startPhotoBtn) {
-            elements.startPhotoBtn.addEventListener('click', startPhotoSession);
-        }
-
-        // Review Modal Actions
-        if (elements.downloadBtn) {
-            elements.downloadBtn.addEventListener('click', downloadStrip);
-        }
-
-        if (elements.retakeBtn) {
-            elements.retakeBtn.addEventListener('click', retakeAll);
-        }
-
-        if (elements.saveBtn) {
-            elements.saveBtn.addEventListener('click', saveStrip);
-        }
-
-        // Frame Selection in Review
-        if (elements.frameOptions) {
-            const frameOptions = elements.frameOptions.querySelectorAll('.frame-option');
-
-            frameOptions.forEach(option => {
-                option.addEventListener('click', function () {
-                    frameOptions.forEach(f => f.classList.remove('active'));
-                    this.classList.add('active');
-
-                    state.selectedFrame = {
-                        id: this.dataset.frameId,
-                        url: this.dataset.frameUrl,
-                    };
-
-                    // Redraw strip with new frame
-                    drawPhotoStrip();
-                });
-            });
-        }
-    }
-
-    // =========================
-    // Camera Handling
-    // =========================
-
-    async function initializeCamera() {
-        try {
-            console.log('Requesting camera access...');
-
-            // Request permission first
-            await navigator.mediaDevices.getUserMedia({ video: true });
-
-            // Get devices
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            state.videoDevices = devices.filter(d => d.kind === 'videoinput');
-
-            console.log(`Found ${state.videoDevices.length} cameras`);
-
-            // Populate select
-            if (elements.cameraSelect) {
-                elements.cameraSelect.innerHTML = '';
-                state.videoDevices.forEach((device, index) => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.textContent = device.label || `Camera ${index + 1}`;
-                    elements.cameraSelect.appendChild(option);
-                });
-            }
-
-            // Start with first camera
-            if (state.videoDevices.length > 0) {
-                state.currentDeviceId = state.videoDevices[0].deviceId;
-
-                if (elements.cameraSelect) {
-                    elements.cameraSelect.value = state.currentDeviceId;
-                }
-
-                await startCamera();
-            }
-        } catch (error) {
-            console.error('Camera error:', error);
-            alert('Cannot access camera. Please allow camera permission.');
-        }
-    }
-
-    async function startCamera() {
-        try {
-            if (state.stream) {
-                state.stream.getTracks().forEach(track => track.stop());
-            }
-
-            const constraints = {
-                video: {
-                    deviceId: state.currentDeviceId ? { exact: state.currentDeviceId } : undefined,
-                    width: { ideal: 1280 },
-                    height: { ideal: 960 },
-                },
-                audio: false,
-            };
-
-            state.stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-            if (elements.video) {
-                elements.video.srcObject = state.stream;
-            }
-
-            console.log('Camera started');
-        } catch (error) {
-            console.error('Error starting camera:', error);
-        }
-    }
-
-    // =========================
-    // Capture Flow
-    // =========================
-
-    async function startPhotoSession() {
-        if (state.isCapturing) return;
-
-        state.isCapturing = true;
-        state.capturedPhotos = [];
-        state.currentPhotoIndex = 0;
-
-        if (elements.startPhotoBtn) {
-            elements.startPhotoBtn.disabled = true;
-
-            const btnTextSpan = elements.startPhotoBtn.querySelector('.btn-text');
-            if (btnTextSpan) {
-                btnTextSpan.textContent = 'Capturing...';
-            } else {
-                elements.startPhotoBtn.textContent = 'Capturing...';
-            }
-        }
-
-        // Clear thumbnails
-        if (elements.thumbnailContainer) {
-            elements.thumbnailContainer.innerHTML = '';
-        }
-        updateProgress();
-
-        // Capture photos
-        for (let i = 0; i < state.photoCount; i++) {
-            state.currentPhotoIndex = i;
-            await capturePhoto();
-
-            if (i < state.photoCount - 1) {
-                await sleep(1000);
-            }
-        }
-
-        // All photos captured
-        state.isCapturing = false;
-
-        if (elements.startPhotoBtn) {
-            elements.startPhotoBtn.disabled = false;
-
-            const btnTextSpan = elements.startPhotoBtn.querySelector('.btn-text');
-            if (btnTextSpan) {
-                btnTextSpan.textContent = 'Mulai Foto';
-            } else {
-                elements.startPhotoBtn.textContent = 'Mulai Foto';
-            }
-        }
-
-        // Show review modal
-        showReviewModal();
-    }
-
-    async function capturePhoto() {
-        // Countdown
-        if (state.timerSeconds > 0) {
-            await showCountdown();
-        }
-
-        // Flash
-        if (elements.flashEffect) {
-            elements.flashEffect.style.display = 'block';
-            setTimeout(() => {
-                elements.flashEffect.style.display = 'none';
-            }, 300);
-        }
-
-        // Capture
-        const photoData = captureFromVideo();
-        state.capturedPhotos.push(photoData);
-
-        // Update UI
-        addThumbnail(photoData, state.currentPhotoIndex);
-        updateProgress();
-    }
-
-    function showCountdown() {
-        return new Promise(resolve => {
-            let count = state.timerSeconds;
-
-            if (!elements.countdownOverlay || !elements.countdownNumber) {
-                resolve();
-                return;
-            }
-
-            elements.countdownOverlay.style.display = 'flex';
-            elements.countdownNumber.textContent = count;
-
-            const interval = setInterval(() => {
-                count--;
-
-                if (count > 0) {
-                    elements.countdownNumber.textContent = count;
-                } else {
-                    clearInterval(interval);
-                    elements.countdownOverlay.style.display = 'none';
-                    resolve();
-                }
-            }, 1000);
+        this.photos.forEach((photo, index) => {
+            const div = document.createElement('div');
+            div.className = 'thumbnail-item';
+            div.innerHTML = `
+                <img src="${photo}" alt="Photo ${index + 1}">
+                <div class="thumbnail-badge">${index + 1}</div>
+            `;
+            container.appendChild(div);
         });
     }
 
-    function captureFromVideo() {
-        if (!elements.video || !elements.canvas) return null;
-
-        elements.canvas.width = elements.video.videoWidth || 1280;
-        elements.canvas.height = elements.video.videoHeight || 960;
-
-        const ctx = elements.canvas.getContext('2d');
-        ctx.drawImage(elements.video, 0, 0, elements.canvas.width, elements.canvas.height);
-
-        return elements.canvas.toDataURL('image/png');
+    updateProgress() {
+        const text = document.getElementById('progressText');
+        const fill = document.getElementById('progressFill');
+        
+        text.textContent = `${this.photos.length}/${this.currentPhotoCount} foto`;
+        fill.style.width = `${(this.photos.length / this.currentPhotoCount) * 100}%`;
     }
 
-    function addThumbnail(photoData, index) {
-        if (!elements.thumbnailContainer) return;
-        if (!photoData) return;
-
-        const div = document.createElement('div');
-        div.className = 'thumbnail-item';
-        div.innerHTML = `
-            <img src="${photoData}" alt="Photo ${index + 1}">
-            <div class="thumbnail-badge">${index + 1}</div>
-        `;
-        elements.thumbnailContainer.appendChild(div);
+    showReviewModal() {
+        this.updateStripPreview();
+        document.getElementById('reviewModal').style.display = 'flex';
     }
 
-    function updateProgress() {
-        const current = state.capturedPhotos.length;
-        const total = state.photoCount;
-        const percentage = total > 0 ? (current / total) * 100 : 0;
+    closeReviewModal() {
+        document.getElementById('reviewModal').style.display = 'none';
+    }
 
-        if (elements.progressText) {
-            elements.progressText.textContent = `${current}/${total} foto`;
+    async updateStripPreview() {
+        const canvas = document.getElementById('stripCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas dimensions based on photo count
+        const canvasWidth = 360;
+        let canvasHeight;
+        
+        switch(this.currentPhotoCount) {
+            case 2: canvasHeight = 800; break;
+            case 3: canvasHeight = 1000; break;
+            case 4: canvasHeight = 1200; break;
+            default: canvasHeight = 1200;
         }
 
-        if (elements.progressFill) {
-            elements.progressFill.style.width = `${percentage}%`;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+
+        // Get frame color
+        let frameColor;
+        switch(this.selectedColor) {
+            case 'brown': frameColor = '#6B4423'; break;
+            case 'cream': frameColor = '#CBA991'; break;
+            case 'white': frameColor = '#F5F5F5'; break;
+            default: frameColor = '#6B4423';
         }
+
+        // Draw frame background
+        ctx.fillStyle = frameColor;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        // Calculate dimensions for photo slots
+        const padding = 30;
+        const photoGap = 15;
+        const photoWidth = canvasWidth - (padding * 2);
+        const availableHeight = canvasHeight - (padding * 2) - (photoGap * (this.currentPhotoCount - 1));
+        const photoHeight = availableHeight / this.currentPhotoCount;
+
+        // Draw photos with white borders
+        for (let i = 0; i < this.photos.length; i++) {
+            const img = await this.loadImage(this.photos[i]);
+            
+            const xPos = padding;
+            const yPos = padding + (i * (photoHeight + photoGap));
+            
+            // Draw white background/border (5px border)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(xPos - 5, yPos - 5, photoWidth + 10, photoHeight + 10);
+            
+            // Draw photo
+            ctx.drawImage(img, xPos, yPos, photoWidth, photoHeight);
+        }
+
+        // Add frame border effect
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, canvasWidth - 4, canvasHeight - 4);
+
+        // Add subtle shadow for depth
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 0.05)');
+        gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0.05)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     }
 
-    // =========================
-    // Review Modal & Strip
-    // =========================
-
-    function showReviewModal() {
-        if (!elements.reviewModal) return;
-        elements.reviewModal.style.display = 'flex';
-        drawPhotoStrip();
+    async downloadPhotoStrip() {
+        const canvas = document.getElementById('stripCanvas');
+        const link = document.createElement('a');
+        const timestamp = new Date().getTime();
+        
+        link.download = `bingkis-kaca-photostrip-${timestamp}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
     }
 
-    function drawPhotoStrip() {
-        if (!elements.stripCanvas || state.capturedPhotos.length === 0) return;
+    retakePhotos() {
+        this.closeReviewModal();
+        this.photos = [];
+        this.updateThumbnails();
+        this.updateProgress();
+    }
 
-        const photoWidth = 400;
-        const photoHeight = 300;
-        const stripWidth = photoWidth;
-        const stripHeight = photoHeight * state.photoCount;
-
-        elements.stripCanvas.width = stripWidth;
-        elements.stripCanvas.height = stripHeight;
-
-        const ctx = elements.stripCanvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, stripWidth, stripHeight);
-
-        let loadedCount = 0;
-        const images = [];
-
-        state.capturedPhotos.forEach((photoData, index) => {
+    loadImage(src) {
+        return new Promise((resolve, reject) => {
             const img = new Image();
-
-            img.onload = function () {
-                images[index] = img;
-                loadedCount++;
-
-                if (loadedCount === state.capturedPhotos.length) {
-                    // Draw all photos
-                    images.forEach((image, idx) => {
-                        const yPos = idx * photoHeight;
-                        ctx.drawImage(image, 0, yPos, photoWidth, photoHeight);
-                    });
-
-                    // Draw frame if selected
-                    if (state.selectedFrame && state.selectedFrame.url) {
-                        const frameImg = new Image();
-                        frameImg.crossOrigin = 'anonymous';
-
-                        frameImg.onload = function () {
-                            for (let i = 0; i < state.photoCount; i++) {
-                                const yPos = i * photoHeight;
-                                ctx.drawImage(frameImg, 0, yPos, photoWidth, photoHeight);
-                            }
-                        };
-
-                        frameImg.src = state.selectedFrame.url;
-                    }
-                }
-            };
-
-            img.src = photoData;
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = src;
         });
     }
 
-    function downloadStrip() {
-        if (!elements.stripCanvas) return;
-
-        elements.stripCanvas.toBlob(blob => {
-            if (!blob) return;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `bingkiskaca_${Date.now()}.png`;
-            a.click();
-            URL.revokeObjectURL(url);
-        });
-    }
-
-    function retakeAll() {
-        if (!confirm('Retake all photos?')) return;
-
-        if (elements.reviewModal) {
-            elements.reviewModal.style.display = 'none';
-        }
-
-        state.capturedPhotos = [];
-        updateProgress();
-    }
-
-    // =========================
-    // Save Strip to Server
-    // =========================
-
-    async function saveStrip() {
-        if (!elements.saveBtn) return;
-
-        try {
-            elements.saveBtn.disabled = true;
-            elements.saveBtn.innerHTML = '<span>⏳</span> Saving...';
-
-            const data = {
-                photos: state.capturedPhotos,
-                frame_id: state.selectedFrame ? state.selectedFrame.id : null,
-                photo_count: state.photoCount,
-            };
-
-            const response = await fetch('/photobooth/compose', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': window.csrfToken,
-                },
-                body: JSON.stringify(data),
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                alert('Saved successfully!');
-                if (confirm('View in profile?')) {
-                    window.location.href = '/profile';
-                } else {
-                    if (elements.reviewModal) {
-                        elements.reviewModal.style.display = 'none';
-                    }
-                    state.capturedPhotos = [];
-                    updateProgress();
-                }
-            } else {
-                throw new Error(result.error || 'Save failed');
-            }
-        } catch (error) {
-            alert('Error: ' + error.message);
-        } finally {
-            elements.saveBtn.disabled = false;
-            elements.saveBtn.innerHTML = '<span>💾</span> Simpan';
-        }
-    }
-
-    // =========================
-    // Utilities
-    // =========================
-
-    function sleep(ms) {
+    wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
+}
 
-    // =========================
-    // DOM Ready
-    // =========================
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    new PhotoBoothApp();
+});
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-
-    // =========================
-    // Global functions for modals
-    // =========================
-
-    window.closeLoginModal = function () {
-        const modal = document.getElementById('loginModal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
-    };
-})();
+// Close login modal function
+function closeLoginModal() {
+    document.getElementById('loginModal').style.display = 'none';
+}

@@ -62,7 +62,7 @@
 
                     <!-- Action Button -->
                     <button type="button" id="startPhotoBtn" class="btn-capture">
-                        <span class="btn-icon"></span>
+                        <span class="btn-icon">📷</span>
                         <span class="btn-text">Mulai Foto</span>
                     </button>
                 </div>
@@ -93,46 +93,47 @@
         <h2 class="review-title">Photo Strip Review</h2>
         
         <div class="review-layout">
-            <!-- Left: Strip Preview -->
+            <!-- Left: Strip Preview with Character -->
             <div class="review-left">
-                <div class="strip-preview-container">
-                    <canvas id="stripCanvas" class="strip-canvas"></canvas>
+                <div class="review-left-content">
+                    <div class="character-container">
+                        <img src="{{ asset('images/character-left.png') }}" alt="Character" class="character-image" onerror="this.style.display='none'">
+                    </div>
+                    <div class="strip-preview-wrapper">
+                        <div class="strip-preview-container">
+                            <canvas id="stripCanvas" class="strip-canvas"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Right: Frame Selection & Actions -->
+            <!-- Right: Frame Selection & Actions with Character -->
             <div class="review-right">
-                <div class="frame-picker">
-                    <h3>Pick Your Photo Frame</h3>
-                    <div class="frame-options" id="frameOptions">
-                        @if($categories->count() > 0)
-                            @foreach($categories as $category)
-                                @if($category->activeFrames->count() > 0)
-                                    @foreach($category->activeFrames as $frame)
-                                        <div class="frame-option" data-frame-id="{{ $frame->id }}" data-frame-url="{{ $frame->image_url }}">
-                                            <img src="{{ $frame->image_url }}" alt="{{ $frame->name }}">
-                                        </div>
-                                    @endforeach
-                                @endif
-                            @endforeach
-                        @else
-                            <p class="no-frames">No frames available</p>
-                        @endif
+                <div class="review-right-content">
+                    <div class="frame-picker">
+                        <h3>Pick Your Photo Frame</h3>
+                        <div class="color-selector" id="colorSelector">
+                            <button class="color-btn active" data-color="brown" style="background: #6B4423;" title="Brown"></button>
+                            <button class="color-btn" data-color="cream" style="background: #CBA991;" title="Cream"></button>
+                            <button class="color-btn" data-color="white" style="background: #FFFFFF; border: 3px solid #522504;" title="White"></button>
+                        </div>
                     </div>
-                </div>
 
-                <div class="review-actions">
-                    <button type="button" id="downloadBtn" class="btn-review btn-download">
-                        <span>⬇</span> Download
-                    </button>
-                    <button type="button" id="retakeBtn" class="btn-review btn-retake">
-                        <span></span> Retake
-                    </button>
-                    @auth
-                        <button type="button" id="saveBtn" class="btn-review btn-save">
-                            <span></span> Simpan
+                    <div class="review-actions">
+                        <button type="button" id="backBtn" class="btn-review btn-back">
+                            Back
                         </button>
-                    @endauth
+                        <button type="button" id="downloadBtn" class="btn-review btn-download">
+                            Download
+                        </button>
+                        <button type="button" id="retakeBtn" class="btn-review btn-retake">
+                            Retake
+                        </button>
+                    </div>
+
+                    <div class="character-right-container">
+                        <img src="{{ asset('images/character-right.png') }}" alt="Character" class="character-image-right" onerror="this.style.display='none'">
+                    </div>
                 </div>
             </div>
         </div>
@@ -470,8 +471,8 @@
 .review-content {
     background: #CBA991;
     border-radius: 20px;
-    padding: 2rem;
-    max-width: 1200px;
+    padding: 2.5rem;
+    max-width: 1000px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
@@ -479,136 +480,190 @@
 
 .review-title {
     text-align: center;
-    color: white;
+    color: #522504;
     font-size: 2rem;
     margin-bottom: 2rem;
+    font-weight: 700;
 }
 
 .review-layout {
     display: grid;
-    grid-template-columns: 1fr 400px;
-    gap: 2rem;
+    grid-template-columns: auto 1fr;
+    gap: 2.5rem;
+    align-items: stretch;
 }
 
+/* Left Side - Canvas Preview */
 .review-left {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
 }
 
+.review-left-content {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+}
+
+.character-container {
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 15px;
+}
+
+.character-image {
+    width: 90px;
+    height: auto;
+    object-fit: contain;
+}
+
+.strip-preview-wrapper {
+    display: flex;
+    align-items: center;
+}
+
 .strip-preview-container {
-    background: white;
-    padding: 20px;
-    border-radius: 15px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
 }
 
 .strip-canvas {
+    display: block;
+    max-height: 600px;
     max-width: 100%;
     height: auto;
-    display: block;
-    border-radius: 10px;
+    width: auto;
+    border-radius: 8px;
 }
 
+/* Right Side - Controls */
 .review-right {
     display: flex;
     flex-direction: column;
+    min-width: 280px;
+}
+
+.review-right-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     gap: 1.5rem;
+    height: 100%;
 }
 
 .frame-picker {
     background: white;
     border-radius: 15px;
-    padding: 1.5rem;
+    padding: 1.75rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
 .frame-picker h3 {
     color: #522504;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
     font-size: 1.1rem;
-}
-
-.frame-options {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.frame-option {
-    cursor: pointer;
-    border: 3px solid transparent;
-    border-radius: 10px;
-    padding: 0.25rem;
-    transition: all 0.3s ease;
-    aspect-ratio: 1;
-    overflow: hidden;
-}
-
-.frame-option:hover {
-    border-color: #9D6B46;
-    transform: scale(1.05);
-}
-
-.frame-option.active {
-    border-color: #522504;
-    box-shadow: 0 0 0 3px rgba(82, 37, 4, 0.2);
-}
-
-.frame-option img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 6px;
-}
-
-.no-frames {
     text-align: center;
-    color: #999;
-    padding: 2rem;
+    font-weight: 600;
+}
+
+.color-selector {
+    display: flex;
+    justify-content: center;
+    gap: 1.2rem;
+}
+
+.color-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+
+.color-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+}
+
+.color-btn.active {
+    border-color: #522504;
+    box-shadow: 0 0 0 5px rgba(82, 37, 4, 0.3);
+    transform: scale(1.15);
 }
 
 .review-actions {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.85rem;
 }
 
 .btn-review {
-    padding: 1rem;
+    padding: 1rem 1.5rem;
     border: none;
-    border-radius: 10px;
+    border-radius: 50px;
     font-family: 'Poppins', sans-serif;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
     transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-back {
+    background: #6c757d;
+    color: white;
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-back:hover {
+    background: #5a6268;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(108, 117, 125, 0.4);
 }
 
 .btn-download {
     background: #522504;
     color: white;
+    box-shadow: 0 4px 12px rgba(82, 37, 4, 0.3);
+}
+
+.btn-download:hover {
+    background: #6b2f05;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(82, 37, 4, 0.4);
 }
 
 .btn-retake {
     background: white;
     color: #522504;
     border: 2px solid #522504;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.btn-save {
-    background: #28a745;
+.btn-retake:hover {
+    background: #522504;
     color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(82, 37, 4, 0.3);
 }
 
-.btn-review:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+.character-right-container {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+    margin-top: auto;
+}
+
+.character-image-right {
+    width: 110px;
+    height: auto;
+    object-fit: contain;
 }
 
 /* Login Modal */
@@ -651,15 +706,82 @@
     margin-top: 1.5rem;
 }
 
+.login-actions .btn-primary, 
+.login-actions .btn-secondary {
+    flex: 1;
+    padding: 0.75rem;
+    border-radius: 8px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.login-actions .btn-primary {
+    background: #522504;
+    color: white;
+}
+
+.login-actions .btn-secondary {
+    background: white;
+    color: #522504;
+    border: 2px solid #522504;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
-    .photobooth-layout,
-    .review-layout {
+    .photobooth-layout {
         grid-template-columns: 1fr;
     }
     
     .control-panel {
         grid-template-columns: 1fr;
+    }
+
+    .review-layout {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    .review-left-content {
+        justify-content: center;
+    }
+
+    .strip-canvas {
+        max-height: 500px;
+    }
+
+    .character-image,
+    .character-image-right {
+        width: 70px;
+    }
+
+    .review-right {
+        min-width: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .review-content {
+        padding: 1.5rem;
+    }
+
+    .review-title {
+        font-size: 1.5rem;
+    }
+
+    .color-btn {
+        width: 50px;
+        height: 50px;
+    }
+
+    .strip-canvas {
+        max-height: 400px;
+    }
+
+    .character-image,
+    .character-image-right {
+        width: 60px;
     }
 }
 </style>
@@ -668,6 +790,23 @@
 @push('scripts')
 <script>
 window.csrfToken = '{{ csrf_token() }}';
+window.framesData = {
+    frame2: {
+        brown: '{{ asset("images/frames/frame2_brown.png") }}',
+        cream: '{{ asset("images/frames/frame2_cream.png") }}',
+        white: '{{ asset("images/frames/frame2_white.png") }}'
+    },
+    frame3: {
+        brown: '{{ asset("images/frames/frame3_brown.png") }}',
+        cream: '{{ asset("images/frames/frame3_cream.png") }}',
+        white: '{{ asset("images/frames/frame3_white.png") }}'
+    },
+    frame4: {
+        brown: '{{ asset("images/frames/frame4_brown.png") }}',
+        cream: '{{ asset("images/frames/frame4_cream.png") }}',
+        white: '{{ asset("images/frames/frame4_white.png") }}'
+    }
+};
 </script>
 <script src="{{ asset('js/photobooth-complete.js') }}"></script>
 @endpush
