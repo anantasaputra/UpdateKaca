@@ -8,48 +8,122 @@ use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
-    public function __construct()
+    /**
+     * Display a listing of users
+     */
+    public function index(Request $request)
     {
-        $this->middleware(['auth', 'admin']);
-    }
+        $query = User::query();
 
-    public function index()
-    {
-        $users = User::where('is_admin', false)
-            ->withCount(['photoStrips', 'photos'])
-            ->orderBy('created_at', 'desc')
+        // Search
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        // Filter by status
+        if ($request->filled('status')) {
+            if ($request->status === 'blocked') {
+                $query->where('is_blocked', true);
+            } elseif ($request->status === 'active') {
+                $query->where('is_blocked', false);
+            }
+        }
+
+        // Filter by role
+        if ($request->filled('role')) {
+            if ($request->role === 'admin') {
+                $query->where('is_admin', true);
+            } elseif ($request->role === 'user') {
+                $query->where('is_admin', false);
+            }
+        }
+
+        $users = $query->withCount('photoStrips')
+            ->latest()
             ->paginate(20);
 
         return view('admin.users.index', compact('users'));
     }
 
-    public function toggleBlock(User $user)
+    /**
+     * Display the specified user
+     */
+    public function show(User $user)
     {
-        if ($user->isAdmin()) {
-            return back()
-                ->withErrors(['error' => 'Cannot block admin users']);
-        }
+        $user->load(['photoStrips' => function($query) {
+            $query->latest()->take(20);
+        }]);
 
-        $user->update([
-            'is_blocked' => ! $user->is_blocked,
-        ]);
+        $stats = [
+            'total_strips' => $user->photoStrips()->count(),
+            'saved_strips' => $user->photoStrips()->where('is_saved', true)->count(),
+            'total_photos' => $user->photos()->count(),
+        ];
 
-        $status = $user->is_blocked ? 'blocked' : 'unblocked';
-
-        return back()
-            ->with('success', "User {$status} successfully");
+        return view('admin.users.show', compact('user', 'stats'));
     }
 
-    public function destroy(User $user)
+    /**
+     * Block a user
+     */
+    public function block(User $user)
     {
-        if ($user->isAdmin()) {
-            return back()
-                ->withErrors(['error' => 'Cannot delete admin users']);
+        if ($user->is_admin) {
+            return back()->with('error', 'Tidak dapat memblokir admin.');
         }
 
+        $user->update(['is_blocked' => true]);
+
+        return back()->with('success', "User {$user->name} berhasil diblokir.");
+    }
+
+    /**
+     * Unblock a user
+     */
+    public function unblock(User $user)
+    {
+        $user->update(['is_blocked' => false]);
+
+        return back()->with('success', "User {$user->name} berhasil di-unblock.");
+    }
+
+    /**
+     * Toggle block status (untuk kompatibilitas dengan route lama)
+     */
+    public function toggleBlock(User $user)
+    {
+        if ($user->is_admin) {
+            return back()->with('error', 'Tidak dapat memblokir admin.');
+        }
+
+        $user->update(['is_blocked' => !$user->is_blocked]);
+
+        $status = $user->is_blocked ? 'diblokir' : 'di-unblock';
+        
+        return back()->with('success', "User {$user->name} berhasil {$status}.");
+    }
+
+    /**
+     * Remove the specified user
+     */
+    public function destroy(User $user)
+    {
+        if ($user->is_admin) {
+            return back()->with('error', 'Tidak dapat menghapus admin.');
+        }
+
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'Tidak dapat menghapus akun sendiri.');
+        }
+
+        $userName = $user->name;
         $user->delete();
 
-        return back()
-            ->with('success', 'User deleted successfully');
+        return redirect()->route('admin.users.index')
+            ->with('success', "User {$userName} berhasil dihapus.");
     }
 }
