@@ -1,4 +1,4 @@
-// PhotoBooth Application with Custom PNG Frames
+// PhotoBooth Application
 class PhotoBoothApp {
     constructor() {
         this.video = document.getElementById('cameraVideo');
@@ -15,52 +15,7 @@ class PhotoBoothApp {
         this.currentStripUrl = null;
         this.retakingIndex = null;
 
-        // PERBAIKAN: Konfigurasi koordinat foto untuk setiap frame
-        this.frameConfigs = this.getFrameConfigs();
-
         this.init();
-    }
-
-    // BARU: Konfigurasi area foto untuk setiap layout
-    getFrameConfigs() {
-        return {
-            // Layout 2 foto (vertikal)
-            2: {
-                frameSize: { width: 1200, height: 1800 },
-                photoAreas: [
-                    // Foto 1 (atas)
-                    { x: 70, y: 60, width: 1050, height: 735 },
-                    // Foto 2 (bawah)
-                    { x: 70, y: 805, width: 1050, height: 735 }
-                ]
-            },
-            // Layout 3 foto (2 atas, 1 bawah)
-            3: {
-                frameSize: { width: 1200, height: 1800 },
-                photoAreas: [
-                     // Foto 1 (kiri atas)
-                    { x: 70, y: 60, width: 520, height: 765 },
-                    // Foto 2 (kanan atas)
-                    { x: 610, y: 60, width: 520, height: 765 },
-                    // Foto 3 (bawah full)
-                    { x: 70, y: 805, width: 1050, height: 735 }
-                ]
-            },
-            // Layout 4 foto (2x2 grid)
-            4: {
-                frameSize: { width: 1200, height: 1800 },
-                photoAreas: [
-                    // Foto 1 (kiri atas)
-                    { x: 70, y: 60, width: 520, height: 765 },
-                    // Foto 2 (kanan atas)
-                    { x: 610, y: 60, width: 520, height: 765 },
-                    // Foto 3 (kiri bawah)
-                    { x: 70, y: 805, width: 520, height: 765 },
-                    // Foto 4 (kanan bawah)
-                    { x: 610, y: 805, width: 520, height: 765 }
-                ]
-            }
-        };
     }
 
     init() {
@@ -348,10 +303,26 @@ class PhotoBoothApp {
                 downloadBtn.innerHTML = 'Processing...';
             }
 
-            // PERBAIKAN: Buat canvas dengan frame PNG custom
-            const finalCanvas = await this.createFinalCanvasWithCustomFrame();
-            const finalImageData = finalCanvas.toDataURL('image/png');
-            await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
+            // PERBAIKAN: Cek apakah frame tersedia
+            if (!window.framesData || !window.framesData[this.frameType]) {
+                console.warn('Frame tidak tersedia, gunakan fallback');
+                const finalCanvas = await this.createFinalCanvasSimple();
+                const finalImageData = finalCanvas.toDataURL('image/png');
+                await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
+                return;
+            }
+
+            // Coba gunakan frame image
+            try {
+                const finalCanvas = await this.createFinalCanvasWithFrame();
+                const finalImageData = finalCanvas.toDataURL('image/png');
+                await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
+            } catch (frameError) {
+                console.error('Error loading frame, gunakan fallback:', frameError);
+                const finalCanvas = await this.createFinalCanvasSimple();
+                const finalImageData = finalCanvas.toDataURL('image/png');
+                await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
+            }
 
         } catch (error) {
             console.error('Error composing strip:', error);
@@ -365,6 +336,7 @@ class PhotoBoothApp {
         }
     }
 
+    // BARU: Method untuk kirim ke server
     async sendToServer(finalImageData, downloadBtn, originalDownloadText) {
         const response = await fetch('/photobooth/compose', {
             method: 'POST',
@@ -401,84 +373,117 @@ class PhotoBoothApp {
         }
     }
 
-    // PERBAIKAN UTAMA: Gunakan frame PNG custom dengan layout yang benar
-    async createFinalCanvasWithCustomFrame() {
+    // BARU: Fallback - buat canvas tanpa frame image
+    async createFinalCanvasSimple() {
         const tempCanvas = document.createElement('canvas');
         const ctx = tempCanvas.getContext('2d');
 
-        // Ambil konfigurasi berdasarkan jumlah foto
-        const config = this.frameConfigs[this.currentPhotoCount];
+        const canvasWidth = 800;
+        let canvasHeight;
         
-        if (!config) {
-            throw new Error(`Konfigurasi tidak ditemukan untuk ${this.currentPhotoCount} foto`);
+        switch(this.currentPhotoCount) {
+            case 2: canvasHeight = 1600; break;
+            case 3: canvasHeight = 2000; break;
+            case 4: canvasHeight = 2400; break;
+            default: canvasHeight = 2400;
         }
 
-        // Set ukuran canvas sesuai frame
-        tempCanvas.width = config.frameSize.width;
-        tempCanvas.height = config.frameSize.height;
+        tempCanvas.width = canvasWidth;
+        tempCanvas.height = canvasHeight;
 
-        // Background putih
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        // Frame color
+        let frameColor;
+        switch(this.selectedColor) {
+            case 'brown': frameColor = '#6B4423'; break;
+            case 'cream': frameColor = '#CBA991'; break;
+            case 'white': frameColor = '#F5F5F5'; break;
+            default: frameColor = '#6B4423';
+        }
+        
+        ctx.fillStyle = frameColor;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-        // Gambar foto-foto di posisi yang sudah ditentukan
+        const padding = 60;
+        const photoGap = 30;
+        const photoWidth = canvasWidth - (padding * 2);
+        const availableHeight = canvasHeight - (padding * 2) - (photoGap * (this.currentPhotoCount - 1));
+        const photoHeight = availableHeight / this.currentPhotoCount;
+
         for (let i = 0; i < this.photos.length; i++) {
-            const photoImg = await this.loadImage(this.photos[i]);
-            const area = config.photoAreas[i];
+            const img = await this.loadImage(this.photos[i]);
             
-            if (!area) {
-                console.warn(`Area foto ${i + 1} tidak ditemukan`);
-                continue;
-            }
-            
-            // PERBAIKAN: Gunakan cover fit agar foto tidak gepeng
-            this.drawImageCover(ctx, photoImg, area.x, area.y, area.width, area.height);
+            const xPos = padding;
+            const yPos = padding + (i * (photoHeight + photoGap));
+         
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(xPos - 10, yPos - 10, photoWidth + 20, photoHeight + 20);
+        
+    
+            ctx.drawImage(img, xPos, yPos, photoWidth, photoHeight);
         }
 
-        // Load dan gambar frame PNG di atas foto
-        const framePath = `/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
-        console.log('Loading frame:', framePath);
-        
-        try {
-            const frameImg = await this.loadImage(framePath);
-            ctx.drawImage(frameImg, 0, 0, tempCanvas.width, tempCanvas.height);
-        } catch (error) {
-            console.error('Error loading frame:', error);
-            alert(`Frame tidak ditemukan: ${framePath}\nPastikan file frame sudah ada di folder public/frames/`);
-            throw error;
-        }
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 8;
+        ctx.strokeRect(4, 4, canvasWidth - 8, canvasHeight - 8);
 
         return tempCanvas;
     }
 
-    // Helper: Draw image dengan cover fit (tidak gepeng)
-    drawImageCover(ctx, img, x, y, width, height) {
-        const imgRatio = img.width / img.height;
-        const canvasRatio = width / height;
+    // Buat canvas dengan frame image asli
+    async createFinalCanvasWithFrame() {
+        const tempCanvas = document.createElement('canvas');
+        const ctx = tempCanvas.getContext('2d');
+
+        // PERBAIKAN: Tambah error handling
+        const frameUrl = window.framesData[this.frameType][this.selectedColor];
         
-        let drawWidth, drawHeight, offsetX, offsetY;
+        if (!frameUrl) {
+            throw new Error('Frame URL tidak ditemukan');
+        }
+
+        console.log('Loading frame:', frameUrl);
+        const frameImg = await this.loadImage(frameUrl);
+
+        tempCanvas.width = frameImg.width;
+        tempCanvas.height = frameImg.height;
+
+        const photoAreas = this.getPhotoAreas(frameImg.width, frameImg.height);
+
+        for (let i = 0; i < this.photos.length; i++) {
+            const photoImg = await this.loadImage(this.photos[i]);
+            const area = photoAreas[i];
+            
+            ctx.drawImage(photoImg, area.x, area.y, area.width, area.height);
+        }
+
+        ctx.drawImage(frameImg, 0, 0, frameImg.width, frameImg.height);
+
+        return tempCanvas;
+    }
+
+    getPhotoAreas(frameWidth, frameHeight) {
+        const areas = [];
         
-        if (imgRatio > canvasRatio) {
-            // Image lebih lebar - crop horizontal
-            drawHeight = height;
-            drawWidth = img.width * (height / img.height);
-            offsetX = (drawWidth - width) / 2;
-            offsetY = 0;
-        } else {
-            // Image lebih tinggi - crop vertical
-            drawWidth = width;
-            drawHeight = img.height * (width / img.width);
-            offsetX = 0;
-            offsetY = (drawHeight - height) / 2;
+        const borderHorizontal = frameWidth * 0.05;
+        const borderTop = frameHeight * 0.04;
+        const borderBottom = frameHeight * 0.15;
+        const gap = frameHeight * 0.02;
+        
+        const photoWidth = frameWidth - (borderHorizontal * 2);
+        const availableHeight = frameHeight - borderTop - borderBottom;
+        const totalGaps = (this.currentPhotoCount - 1) * gap;
+        const photoHeight = (availableHeight - totalGaps) / this.currentPhotoCount;
+        
+        for (let i = 0; i < this.currentPhotoCount; i++) {
+            areas.push({
+                x: borderHorizontal,
+                y: borderTop + (i * (photoHeight + gap)),
+                width: photoWidth,
+                height: photoHeight
+            });
         }
         
-        // Clip dan gambar foto
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(x, y, width, height);
-        ctx.clip();
-        ctx.drawImage(img, x - offsetX, y - offsetY, drawWidth, drawHeight);
-        ctx.restore();
+        return areas;
     }
 
     showSaveButton() {
@@ -519,6 +524,7 @@ class PhotoBoothApp {
             
             if (result.success) {
                 alert('✅ ' + result.message);
+             
                 window.location.href = '/profile';
             } else {
                 alert(result.message);
@@ -546,50 +552,97 @@ class PhotoBoothApp {
         const canvas = document.getElementById('stripCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Ambil konfigurasi berdasarkan jumlah foto
-        const config = this.frameConfigs[this.currentPhotoCount];
-        
-        if (!config) return;
-
-        // Scale untuk preview (35% dari ukuran asli)
-        const scale = 0.35;
-        canvas.width = config.frameSize.width * scale;
-        canvas.height = config.frameSize.height * scale;
-
-        // Background putih
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Gambar foto-foto
-        for (let i = 0; i < this.photos.length; i++) {
-            const photoImg = await this.loadImage(this.photos[i]);
-            const area = config.photoAreas[i];
-            
-            if (!area) continue;
-            
-            const scaledArea = {
-                x: area.x * scale,
-                y: area.y * scale,
-                width: area.width * scale,
-                height: area.height * scale
-            };
-            
-            this.drawImageCover(ctx, photoImg, scaledArea.x, scaledArea.y, scaledArea.width, scaledArea.height);
+        // PERBAIKAN: Gunakan fallback jika frame tidak ada
+        if (!window.framesData || !window.framesData[this.frameType]) {
+            await this.updateStripPreviewSimple();
+            return;
         }
 
-        // Load dan gambar frame PNG
-        const framePath = `/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
-        
         try {
-            const frameImg = await this.loadImage(framePath);
+            const frameUrl = window.framesData[this.frameType][this.selectedColor];
+            const frameImg = await this.loadImage(frameUrl);
+
+            const scale = 0.4;
+            canvas.width = frameImg.width * scale;
+            canvas.height = frameImg.height * scale;
+
+            const photoAreas = this.getPhotoAreas(canvas.width, canvas.height);
+
+            for (let i = 0; i < this.photos.length; i++) {
+                const photoImg = await this.loadImage(this.photos[i]);
+                const area = photoAreas[i];
+                
+                ctx.drawImage(photoImg, area.x, area.y, area.width, area.height);
+            }
+
             ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
         } catch (error) {
-            console.error('Error loading frame for preview:', error);
+            console.warn('Error loading frame for preview, gunakan fallback:', error);
+            await this.updateStripPreviewSimple();
         }
     }
 
+    // BARU: Preview tanpa frame image
+    async updateStripPreviewSimple() {
+        const canvas = document.getElementById('stripCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const canvasWidth = 360;
+        let canvasHeight;
+        
+        switch(this.currentPhotoCount) {
+            case 2: canvasHeight = 800; break;
+            case 3: canvasHeight = 1000; break;
+            case 4: canvasHeight = 1200; break;
+            default: canvasHeight = 1200;
+        }
+
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+
+        
+        let frameColor;
+        switch(this.selectedColor) {
+            case 'brown': frameColor = '#6B4423'; break;
+            case 'cream': frameColor = '#CBA991'; break;
+            case 'white': frameColor = '#F5F5F5'; break;
+            default: frameColor = '#6B4423';
+        }
+
+
+        ctx.fillStyle = frameColor;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+
+        const padding = 30;
+        const photoGap = 15;
+        const photoWidth = canvasWidth - (padding * 2);
+        const availableHeight = canvasHeight - (padding * 2) - (photoGap * (this.currentPhotoCount - 1));
+        const photoHeight = availableHeight / this.currentPhotoCount;
+
+
+        for (let i = 0; i < this.photos.length; i++) {
+            const img = await this.loadImage(this.photos[i]);
+            
+            const xPos = padding;
+            const yPos = padding + (i * (photoHeight + photoGap));
+           
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(xPos - 5, yPos - 5, photoWidth + 10, photoHeight + 10);
+        
+            ctx.drawImage(img, xPos, yPos, photoWidth, photoHeight);
+        }
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, canvasWidth - 4, canvasHeight - 4);
+    
+    }
+
+
     async downloadPhotoStrip() {
-        if (this.currentStripId) {
+        if (this.currentStripId) 
+            {
             window.location.href = `/photobooth/download/${this.currentStripId}`;
         } else {
             alert('Photo strip belum siap. Silakan tunggu sebentar...');
@@ -601,9 +654,10 @@ class PhotoBoothApp {
             const img = new Image();
             img.crossOrigin = 'anonymous';
             
+            // PERBAIKAN: Tambah timeout
             const timeout = setTimeout(() => {
                 reject(new Error('Image loading timeout: ' + src));
-            }, 10000);
+            }, 10000); // 10 detik timeout
             
             img.onload = () => {
                 clearTimeout(timeout);
@@ -624,9 +678,11 @@ class PhotoBoothApp {
     }
 }
 
+
 document.addEventListener('DOMContentLoaded', () => {
     new PhotoBoothApp();
 });
+
 
 function closeLoginModal() {
     const modal = document.getElementById('loginModal');
@@ -634,6 +690,7 @@ function closeLoginModal() {
         modal.style.display = 'none';
     }
 }
+
 
 function closeRetakeModal() {
     const modal = document.getElementById('retakeModal');
