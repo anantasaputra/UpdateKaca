@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 
 class Category extends Model
 {
@@ -12,7 +11,6 @@ class Category extends Model
 
     protected $fillable = [
         'name',
-        'slug',
         'description',
         'is_active',
     ];
@@ -21,32 +19,11 @@ class Category extends Model
         'is_active' => 'boolean',
     ];
 
-    // Auto-generate slug
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($category) {
-            if (empty($category->slug)) {
-                $category->slug = Str::slug($category->name);
-            }
-        });
-
-        static::updating(function ($category) {
-            if ($category->isDirty('name') && empty($category->slug)) {
-                $category->slug = Str::slug($category->name);
-            }
-        });
-    }
-
-    // Relationships
+    /**
+     * Get frames that belong to this category
+     */
     public function frames()
     {
         return $this->hasMany(Frame::class);
-    }
-
-    public function activeFrames()
-    {
-        return $this->hasMany(Frame::class)->where('is_active', true);
     }
 }

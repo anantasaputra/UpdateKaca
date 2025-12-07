@@ -5,49 +5,74 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Photo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class PhotoController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware(['auth', 'admin']);
-    }
+    // HAPUS middleware() dari constructor
 
+    /**
+     * Display a listing of photos
+     */
     public function index(Request $request)
     {
-        $status = $request->get('status', 'pending');
+        $query = Photo::with('user');
 
-        $photos = Photo::with('user')
-            ->when($status !== 'all', function ($query) use ($status) {
-                $query->where('status', $status);
-            })
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+        // Search
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('user', function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
 
-        return view('admin.photos.index', compact('photos', 'status'));
+        // Filter by status
+        if ($request->filled('status')) {
+            if ($request->status === 'approved') {
+                $query->where('is_approved', true);
+            } elseif ($request->status === 'pending') {
+                $query->where('is_approved', false);
+            }
+        }
+
+        $photos = $query->latest()->paginate(30);
+
+        return view('admin.photos.index', compact('photos'));
     }
 
+    /**
+     * Approve a photo
+     */
     public function approve(Photo $photo)
     {
-        $photo->approve();
+        $photo->update(['is_approved' => true]);
 
-        return back()
-            ->with('success', 'Photo approved successfully');
+        return back()->with('success', 'Photo berhasil diapprove.');
     }
 
+    /**
+     * Reject a photo
+     */
     public function reject(Photo $photo)
     {
-        $photo->reject();
+        $photo->update(['is_approved' => false]);
 
-        return back()
-            ->with('success', 'Photo rejected successfully');
+        return back()->with('success', 'Photo berhasil direject.');
     }
 
+    /**
+     * Remove the specified photo
+     */
     public function destroy(Photo $photo)
     {
+        if ($photo->file_path) {
+            Storage::disk('public')->delete($photo->file_path);
+        }
+
         $photo->delete();
 
-        return back()
-            ->with('success', 'Photo deleted successfully');
+        return redirect()->route('admin.photos.index')
+            ->with('success', 'Photo berhasil dihapus.');
     }
 }
