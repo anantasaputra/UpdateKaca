@@ -22,9 +22,8 @@
         <div class="container">
             <div class="nav-brand">
                 <a href="{{ route('home') }}">
-                    <span class="brand-text">bingkis</span><span class="brand-kaca">kaca.</span>
+                    <img src="{{ asset('images/logo_bingkis_kaca.png') }}" alt="Bingkis Kaca Logo" class="brand-logo">
                 </a>
-                <p class="brand-tagline">SEMANIS SENYUMAN SEINDAH BINGKISAN</p>
             </div>
 
             <div class="nav-menu">

@@ -69,6 +69,16 @@ body {
     flex-direction: column;
 }
 
+.brand-logo {
+    height: 60px; /* sesuaikan dengan tinggi yang diinginkan */
+    width: auto;
+}
+
+.nav-brand a {
+    display: inline-block;
+}
+
+
 .brand-text {
     font-size: 1.5rem;
     font-weight: 700;
