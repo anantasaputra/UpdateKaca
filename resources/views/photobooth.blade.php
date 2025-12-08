@@ -110,7 +110,7 @@
             <!-- Right: Frame Selection & Actions with Character -->
             <div class="review-right">
                 <div class="review-right-content">
-                    <!-- 🔧 UPDATED: DYNAMIC FRAME PICKER WITH DEBUG -->
+                    <!-- ✅ FIXED: DYNAMIC FRAME PICKER WITH PROPER PATHS -->
                     <div class="frame-picker">
                         <h3>Pick Your Photo Frame</h3>
                         
@@ -124,23 +124,47 @@
                                     
                                     <div class="frames-grid">
                                         @foreach($frames as $frame)
+                                        @php
+                                            // ✅ CRITICAL FIX: Generate proper frame URL with fallbacks
+                                            $frameBasename = basename($frame->image_path);
+                                            $frameUrl = null;
+                                            $frameDataPath = null;
+                                            
+                                            // Try 1: storage/frames/ (symlink)
+                                            if (file_exists(public_path('storage/frames/' . $frameBasename))) {
+                                                $frameUrl = asset('storage/frames/' . $frameBasename);
+                                                $frameDataPath = asset('storage/frames/' . $frameBasename);
+                                            }
+                                            // Try 2: frames/ direct
+                                            elseif (file_exists(public_path('frames/' . $frameBasename))) {
+                                                $frameUrl = asset('frames/' . $frameBasename);
+                                                $frameDataPath = asset('frames/' . $frameBasename);
+                                            }
+                                            // Try 3: Storage disk
+                                            elseif (Storage::disk('public')->exists($frame->image_path)) {
+                                                $frameUrl = Storage::url($frame->image_path);
+                                                $frameDataPath = Storage::url($frame->image_path);
+                                            }
+                                        @endphp
+                                        
                                         <div class="frame-option {{ $loop->first && $photoCount == 4 ? 'active' : '' }}" 
                                              data-frame-id="{{ $frame->id }}"
-                                             data-frame-path="{{ Storage::url($frame->image_path) }}"
+                                             data-frame-path="{{ $frameDataPath ?? asset('images/placeholder-frame.png') }}"
                                              data-color="{{ $frame->color_code }}"
                                              data-photo-count="{{ $frame->photo_count }}"
                                              title="{{ $frame->name }}">
                                             
                                             <div class="frame-preview-thumb">
-                                                @if($frame->image_path && Storage::disk('public')->exists($frame->image_path))
-                                                    <img src="{{ Storage::url($frame->image_path) }}" 
+                                                @if($frameUrl)
+                                                    <img src="{{ $frameUrl }}" 
                                                          alt="{{ $frame->name }}"
                                                          loading="lazy"
-                                                         onerror="console.error('❌ Frame load failed:', this.src); this.parentElement.innerHTML='<div class=\'frame-placeholder-thumb\' style=\'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;\'><span style=\'font-size:2rem;\'>❌</span><small style=\'font-size:0.7rem;color:#999;\'>Load Error</small></div>'">
+                                                         onerror="console.error('❌ Frame load failed:', '{{ $frame->name }}', this.src); this.parentElement.innerHTML='<div class=\'frame-placeholder-thumb\' style=\'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;\'><span style=\'font-size:2rem;\'>❌</span><small style=\'font-size:0.7rem;color:#999;\'>{{ $frame->name }}</small><small style=\'font-size:0.6rem;color:#dc3545;\'>{{ $frameBasename }}</small></div>'">
                                                 @else
                                                     <div class="frame-placeholder-thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;">
                                                         <span style="font-size:2rem;">🖼️</span>
-                                                        <small style="font-size:0.7rem;color:#999;">Not Found</small>
+                                                        <small style="font-size:0.7rem;color:#999;">{{ $frame->name }}</small>
+                                                        <small style="font-size:0.6rem;color:#dc3545;">{{ $frameBasename }}</small>
                                                     </div>
                                                 @endif
                                             </div>
@@ -242,7 +266,7 @@
 
 @push('styles')
 <style>
-/* ===== CSS SAMA DENGAN CODE LAMA ANDA - TIDAK ADA PERUBAHAN ===== */
+/* [SEMUA CSS TETAP SAMA SEPERTI CODE LAMA ANDA - TIDAK ADA PERUBAHAN] */
 /* Photobooth Styles */
 .photobooth-page {
     background: linear-gradient(135deg, #CBA991 0%, #9D6B46 100%);
@@ -711,6 +735,8 @@
     color: #999;
     font-size: 1.5rem;
     gap: 0.5rem;
+    padding: 0.5rem;
+    text-align: center;
 }
 
 .frame-info {
@@ -1134,55 +1160,63 @@
 
 @push('scripts')
 <script>
-// 🔧 UPDATED: Added better debugging
-console.log('Initializing PhotoBooth Application...');
+console.log('🚀 Initializing PhotoBooth Application...');
 
-window.csrfToken = '{{ csrf_token() }}';
-window.isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
-
-// NEW: Pass frames data from database
+// ✅ CRITICAL: Inject frame data untuk JavaScript
+window.availableFrames = @json($framesJson ?? []);
 window.framesByCount = @json($framesByCount ?? collect());
 window.hasFramesInDB = {{ isset($framesByCount) && $framesByCount->isNotEmpty() ? 'true' : 'false' }};
 
-console.log('Frames loaded:', {
-    hasFramesInDB: window.hasFramesInDB,
-    frameCount: Object.keys(window.framesByCount).length,
-    frames: window.framesByCount
+// Global config
+window.csrfToken = '{{ csrf_token() }}';
+window.isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
+
+// Debug log
+console.log('📦 Backend data loaded:', {
+    framesCount: window.availableFrames.length,
+    hasFrames: window.hasFramesInDB,
+    isAuth: window.isAuthenticated,
+    frames: window.availableFrames
 });
 
-// OLD: Fallback untuk frame lama
+// ✅ FIXED: Fallback frame paths dengan multiple options
 window.framesData = {
     frame2: {
-        brown: '{{ asset("images/frames/frame2_brown.png") }}',
-        cream: '{{ asset("images/frames/frame2_cream.png") }}',
-        white: '{{ asset("images/frames/frame2_white.png") }}'
+        brown: '{{ asset("storage/frames/4R_brown2.png") }}',
+        cream: '{{ asset("storage/frames/4R_cream2.png") }}',
+        white: '{{ asset("storage/frames/4R_white2.png") }}'
     },
     frame3: {
-        brown: '{{ asset("images/frames/frame3_brown.png") }}',
-        cream: '{{ asset("images/frames/frame3_cream.png") }}',
-        white: '{{ asset("images/frames/frame3_white.png") }}'
+        brown: '{{ asset("storage/frames/4R_brown3.png") }}',
+        cream: '{{ asset("storage/frames/4R_cream3.png") }}',
+        white: '{{ asset("storage/frames/4R_white3.png") }}'
     },
     frame4: {
-        brown: '{{ asset("images/frames/frame4_brown.png") }}',
-        cream: '{{ asset("images/frames/frame4_cream.png") }}',
-        white: '{{ asset("images/frames/frame4_white.png") }}'
+        brown: '{{ asset("storage/frames/4R_brown4.png") }}',
+        cream: '{{ asset("storage/frames/4R_cream4.png") }}',
+        white: '{{ asset("storage/frames/4R_white4.png") }}'
     }
 };
 
+// Global strip ID
 let currentStripId = null;
 
+// ✅ DOM ready handler
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, setting up event listeners...');
+    console.log('✅ DOM loaded');
     
     const saveBtn = document.getElementById('saveBtn');
     if (saveBtn) {
         saveBtn.addEventListener('click', saveStripToProfile);
-        console.log('Save button listener attached');
+        console.log('✅ Save button listener attached');
     }
 });
 
+/**
+ * Save strip to user profile
+ */
 function saveStripToProfile() {
-    console.log('Attempting to save strip:', currentStripId);
+    console.log('💾 Saving strip:', currentStripId);
     
     if (!currentStripId) {
         alert('Strip ID tidak ditemukan!');
@@ -1205,38 +1239,62 @@ function saveStripToProfile() {
     .then(response => response.json())
     .then(result => {
         if (result.success) {
-            alert(result.message);
+            alert('✅ ' + result.message);
             window.location.href = '/profile';
         } else {
-            alert(result.message);
+            alert('❌ ' + result.message);
             saveBtn.disabled = false;
             saveBtn.innerHTML = originalText;
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        console.error('❌ Save error:', error);
         alert('Terjadi kesalahan saat menyimpan.');
         saveBtn.disabled = false;
         saveBtn.innerHTML = originalText;
     });
 }
 
+/**
+ * Show save button (called from JavaScript app)
+ */
 function showSaveButton(stripId) {
-    console.log('Showing save button for strip:', stripId);
+    console.log('👁️ Showing save button for strip:', stripId);
     currentStripId = stripId;
+    
     const saveBtn = document.getElementById('saveBtn');
     if (saveBtn && window.isAuthenticated) {
         saveBtn.style.display = 'block';
+        console.log('✅ Save button visible');
+    } else {
+        console.log('⚠️ Save button not shown:', {
+            hasButton: !!saveBtn,
+            isAuth: window.isAuthenticated
+        });
     }
 }
 
+/**
+ * Close retake modal
+ */
 function closeRetakeModal() {
-    document.getElementById('retakeModal').style.display = 'none';
+    const modal = document.getElementById('retakeModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
 }
 
+/**
+ * Close login modal
+ */
 function closeLoginModal() {
-    document.getElementById('loginModal').style.display = 'none';
+    const modal = document.getElementById('loginModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
 }
 </script>
+
+{{-- ✅ Load main PhotoBooth app --}}
 <script src="{{ asset('js/photobooth-complete.js') }}"></script>
 @endpush

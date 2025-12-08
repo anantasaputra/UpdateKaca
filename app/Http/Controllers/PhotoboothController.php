@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\Log;
 class PhotoboothController extends Controller
 {
     /**
-     * Display the photobooth interface with all active frames
+     * ✅ FIXED: Display the photobooth interface with all active frames
+     * Enhanced path handling with multiple fallback options
      */
     public function index()
     {
@@ -26,16 +27,61 @@ class PhotoboothController extends Controller
             ->orderBy('name', 'asc')
             ->get();
 
+        // Group by photo count untuk display
         $framesByCount = $frames->groupBy('photo_count');
+
+        // ✅ FIXED: Generate frame URLs dengan multiple fallback
+        $framesJson = $frames->map(function($frame) {
+            $basename = basename($frame->image_path);
+            $imageUrl = null;
+            
+            // Try 1: asset() storage path (via symlink)
+            $storagePath = 'storage/frames/' . $basename;
+            if (file_exists(public_path($storagePath))) {
+                $imageUrl = asset($storagePath);
+            }
+            // Try 2: public/frames direct
+            elseif (file_exists(public_path('frames/' . $basename))) {
+                $imageUrl = asset('frames/' . $basename);
+            }
+            // Try 3: Storage disk check
+            elseif (Storage::disk('public')->exists($frame->image_path)) {
+                $imageUrl = Storage::url($frame->image_path);
+            }
+            else {
+                Log::error('Frame image not found in any location', [
+                    'frame_id' => $frame->id,
+                    'name' => $frame->name,
+                    'path' => $frame->image_path,
+                    'basename' => $basename,
+                    'checked_paths' => [
+                        'storage' => public_path($storagePath),
+                        'public_frames' => public_path('frames/' . $basename),
+                        'disk_exists' => Storage::disk('public')->exists($frame->image_path),
+                    ]
+                ]);
+                $imageUrl = asset('images/placeholder-frame.png');
+            }
+            
+            return [
+                'id' => $frame->id,
+                'name' => $frame->name,
+                'photo_count' => $frame->photo_count,
+                'color_code' => $frame->color_code,
+                'image_path' => $imageUrl, // ✅ Validated URL
+                'is_default' => $frame->is_default,
+            ];
+        });
 
         Log::info('Photobooth loaded', [
             'total_active_frames' => $frames->count(),
             'frames_by_count' => $framesByCount->map->count()->toArray(),
             'default_frames' => $frames->where('is_default', true)->count(),
             'custom_frames' => $frames->where('is_default', false)->count(),
+            'frames_json_count' => $framesJson->count(),
         ]);
 
-        return view('photobooth', compact('framesByCount'));
+        return view('photobooth', compact('framesByCount', 'framesJson'));
     }
 
     /**
@@ -113,13 +159,13 @@ class PhotoboothController extends Controller
     public function composeStrip(Request $request)
     {
         $request->validate([
-            'image' => 'required|string', // ✅ Changed from 'photos' array to single 'image'
+            'image' => 'required|string', // Single final canvas image
             'frame_id' => 'nullable|exists:frames,id',
             'photo_count' => 'required|integer|in:2,3,4',
         ]);
 
         try {
-            $imageData = $request->input('image'); // ✅ Single final canvas image
+            $imageData = $request->input('image');
             $frameId = $request->input('frame_id');
             $photoCount = $request->input('photo_count');
             $userId = auth()->id();
@@ -128,19 +174,51 @@ class PhotoboothController extends Controller
             // ✅ PENTING: Cek apakah user/guest sudah punya strip yang belum disimpan
             // Jika ada, hapus yang lama untuk menghindari duplikasi
             if ($userId) {
+                $deleted = PhotoStrip::where('user_id', $userId)
+                    ->where('is_saved', false)
+                    ->where('photo_count', $photoCount)
+                    ->get();
+                
+                // Delete old files
+                foreach ($deleted as $oldStrip) {
+                    if (Storage::disk('public')->exists($oldStrip->final_image_path)) {
+                        Storage::disk('public')->delete($oldStrip->final_image_path);
+                    }
+                }
+                
+                // Delete records
                 PhotoStrip::where('user_id', $userId)
                     ->where('is_saved', false)
                     ->where('photo_count', $photoCount)
                     ->delete();
                     
-                Log::info('Deleted old unsaved strips for user', ['user_id' => $userId]);
+                Log::info('Deleted old unsaved strips for user', [
+                    'user_id' => $userId,
+                    'count' => $deleted->count()
+                ]);
             } else {
+                $deleted = PhotoStrip::where('guest_session_id', $guestSessionId)
+                    ->where('is_saved', false)
+                    ->where('photo_count', $photoCount)
+                    ->get();
+                
+                // Delete old files
+                foreach ($deleted as $oldStrip) {
+                    if (Storage::disk('public')->exists($oldStrip->final_image_path)) {
+                        Storage::disk('public')->delete($oldStrip->final_image_path);
+                    }
+                }
+                
+                // Delete records
                 PhotoStrip::where('guest_session_id', $guestSessionId)
                     ->where('is_saved', false)
                     ->where('photo_count', $photoCount)
                     ->delete();
                     
-                Log::info('Deleted old unsaved strips for guest', ['session_id' => $guestSessionId]);
+                Log::info('Deleted old unsaved strips for guest', [
+                    'session_id' => $guestSessionId,
+                    'count' => $deleted->count()
+                ]);
             }
 
             // Validate frame if provided
@@ -160,6 +238,7 @@ class PhotoboothController extends Controller
                     'frame_id' => $frame->id,
                     'frame_name' => $frame->name,
                     'is_default' => $frame->is_default,
+                    'image_path' => $frame->image_path,
                 ]);
             }
 
@@ -201,7 +280,7 @@ class PhotoboothController extends Controller
                 ]);
             }
 
-            // ✅ PENTING: Create HANYA 1 photo strip record per session
+            // ✅ Create HANYA 1 photo strip record per session
             $photoStrip = PhotoStrip::create([
                 'user_id' => $userId,
                 'guest_session_id' => $guestSessionId,
@@ -210,7 +289,7 @@ class PhotoboothController extends Controller
                 'final_image_path' => $stripPath,
                 'photo_count' => $photoCount,
                 'ip_address' => $request->ip(),
-                'is_saved' => false, // ✅ Default false untuk tracking
+                'is_saved' => false, // Default false
             ]);
 
             Log::info('✅ Photo strip created successfully (SINGLE RECORD)', [
@@ -257,7 +336,18 @@ class PhotoboothController extends Controller
             $strip = PhotoStrip::findOrFail($id);
 
             // Check ownership
-            if ($strip->user_id && $strip->user_id !== auth()->id()) {
+            $userId = auth()->id();
+            $guestSessionId = session()->getId();
+            
+            if ($strip->user_id && $strip->user_id !== $userId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized access.'
+                ], 403);
+            }
+            
+            // Check guest session
+            if (!$strip->user_id && $strip->guest_session_id !== $guestSessionId) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized access.'
@@ -274,6 +364,10 @@ class PhotoboothController extends Controller
             }
             
             $imageData = base64_decode($imageData);
+
+            if ($imageData === false) {
+                return response()->json(['error' => 'Base64 decode failed'], 400);
+            }
 
             // Delete old file
             if (Storage::disk('public')->exists($strip->final_image_path)) {
@@ -305,6 +399,11 @@ class PhotoboothController extends Controller
                 'strip_id' => $strip->id,
             ]);
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Photo strip tidak ditemukan.'
+            ], 404);
         } catch (\Exception $e) {
             Log::error('❌ Error updating strip', [
                 'error' => $e->getMessage(),

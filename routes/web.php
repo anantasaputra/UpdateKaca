@@ -10,6 +10,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PhotoboothController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 /*
 |--------------------------------------------------------------------------
@@ -143,23 +144,74 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
 */
 
 if (config('app.debug')) {
-    // Debug frame details
+    
+    // ✅ UPDATED: Debug single frame details
     Route::get('/debug/frame/{frame}', function (App\Models\Frame $frame) {
         return [
-            'frame' => $frame,
+            'id' => $frame->id,
+            'name' => $frame->name,
             'is_default' => $frame->is_default,
             'photo_strips_count' => $frame->photoStrips()->count(),
-            'can_delete' => !$frame->is_default && $frame->photoStrips()->count() === 0,
-            'image_exists' => Storage::disk('public')->exists($frame->image_path),
+            'can_delete' => $frame->canBeDeleted(),
+            
+            // Path info
             'image_path' => $frame->image_path,
-            'full_path' => storage_path('app/public/' . $frame->image_path),
-            'image_url' => Storage::url($frame->image_path),
+            'image_url' => $frame->image_url,
+            'full_path' => $frame->full_path,
+            
+            // Existence checks
+            'image_exists' => $frame->imageExists(),
+            'storage_exists' => Storage::disk('public')->exists($frame->image_path),
+            'public_exists' => file_exists(public_path(str_replace('public/', '', $frame->image_path))),
+            
+            // URLs
+            'storage_url' => Storage::url($frame->image_path),
+            'asset_url' => asset(str_replace('public/', '', $frame->image_path)),
         ];
     })->middleware(['auth', 'admin']);
     
-    // ✅ NEW: Debug photo strips
+    // ✅ NEW: Debug all frames (HTML view)
+    Route::get('/debug/frame-paths', function () {
+        $frames = App\Models\Frame::all();
+        return view('debug-frames', ['frames' => $frames]);
+    });
+    
+    // ✅ NEW: Debug all frames (JSON)
+    Route::get('/debug/frame-json', function () {
+        $frames = App\Models\Frame::all();
+        
+        return response()->json([
+            'total_frames' => $frames->count(),
+            'frames' => $frames->map(function($frame) {
+                return [
+                    'id' => $frame->id,
+                    'name' => $frame->name,
+                    'color_code' => $frame->color_code,
+                    'photo_count' => $frame->photo_count,
+                    'is_active' => $frame->is_active,
+                    'is_default' => $frame->is_default,
+                    
+                    // Path info
+                    'image_path' => $frame->image_path,
+                    'image_url' => $frame->image_url,
+                    'full_path' => $frame->full_path,
+                    
+                    // Existence checks
+                    'exists' => $frame->imageExists(),
+                    'storage_exists' => Storage::disk('public')->exists($frame->image_path),
+                    'public_exists' => file_exists(public_path(str_replace('public/', '', $frame->image_path))),
+                    
+                    // URLs for testing
+                    'storage_url' => Storage::url($frame->image_path),
+                    'asset_url' => asset(str_replace('public/', '', $frame->image_path)),
+                ];
+            })
+        ], JSON_PRETTY_PRINT);
+    });
+    
+    // ✅ Debug photo strips
     Route::get('/debug/photo-strips', function () {
-        return [
+        return response()->json([
             'total_strips' => App\Models\PhotoStrip::count(),
             'saved_strips' => App\Models\PhotoStrip::where('is_saved', true)->count(),
             'unsaved_strips' => App\Models\PhotoStrip::where('is_saved', false)->count(),
@@ -180,17 +232,66 @@ if (config('app.debug')) {
                         'created_at' => $strip->created_at->format('Y-m-d H:i:s'),
                     ];
                 }),
-        ];
+        ], JSON_PRETTY_PRINT);
     })->middleware(['auth', 'admin']);
     
-    // ✅ NEW: Debug session info
+    // ✅ Debug session info
     Route::get('/debug/session', function () {
-        return [
+        return response()->json([
             'session_id' => session()->getId(),
             'is_authenticated' => auth()->check(),
             'user_id' => auth()->id(),
             'user' => auth()->user(),
+        ], JSON_PRETTY_PRINT);
+    });
+    
+    // ✅ NEW: Test specific frame file
+    Route::get('/test-frame/{filename}', function($filename) {
+        $path = 'frames/' . $filename;
+        
+        // Check various locations
+        $checks = [
+            'storage_exists' => Storage::disk('public')->exists($path),
+            'storage_full_path' => storage_path('app/public/' . $path),
+            'storage_file_exists' => file_exists(storage_path('app/public/' . $path)),
+            
+            'public_full_path' => public_path($path),
+            'public_file_exists' => file_exists(public_path($path)),
+            
+            'storage_url' => Storage::url($path),
+            'asset_url' => asset($path),
+            'asset_storage_url' => asset('storage/' . $path),
         ];
+        
+        return response()->json($checks, JSON_PRETTY_PRINT);
+    });
+    
+    // ✅ NEW: Quick fix - Update all frame paths
+    Route::get('/debug/fix-frame-paths', function() {
+        $frames = App\Models\Frame::all();
+        $updated = 0;
+        
+        foreach ($frames as $frame) {
+            // If path doesn't start with 'frames/', fix it
+            if (!str_starts_with($frame->image_path, 'frames/')) {
+                $filename = basename($frame->image_path);
+                $frame->image_path = 'frames/' . $filename;
+                $frame->save();
+                $updated++;
+            }
+        }
+        
+        return response()->json([
+            'message' => 'Frame paths updated',
+            'total_frames' => $frames->count(),
+            'updated_frames' => $updated,
+            'frames' => $frames->map(fn($f) => [
+                'id' => $f->id,
+                'name' => $f->name,
+                'image_path' => $f->image_path,
+                'exists' => $f->imageExists(),
+            ])
+        ], JSON_PRETTY_PRINT);
     });
 }
 

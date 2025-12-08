@@ -1,5 +1,5 @@
 // PhotoBooth Application with Custom PNG Frames + Dynamic DB Frames
-// ✅ UPDATED: Fixed duplikasi riwayat - simpan hanya 1 record per session
+// ✅ UPDATED: Fixed frame loading issues + improved error handling
 
 class PhotoBoothApp {
     constructor() {
@@ -17,28 +17,90 @@ class PhotoBoothApp {
         this.selectedFrameId = null;
         this.selectedFramePath = null;
         
+        // ✅ NEW: Backend frames data
+        this.backendFrames = {};
+        
         // OLD: Fallback color system
         this.selectedColor = 'brown';
         this.frameType = 'frame4';
         
-        // ✅ NEW: Strip management
+        // ✅ Strip management
         this.currentStripId = null;
         this.currentStripUrl = null;
         this.retakingIndex = null;
-        this.isStripSaved = false; // ✅ Flag untuk mencegah save berulang
+        this.isStripSaved = false;
 
-        // Konfigurasi koordinat foto untuk setiap frame
+        // Frame configurations
         this.frameConfigs = this.getFrameConfigs();
 
         console.log('PhotoBoothApp initialized:', {
             useDynamicFrames: this.useDynamicFrames,
-            framesByCount: window.framesByCount
+            framesByCount: window.framesByCount,
+            availableFrames: window.availableFrames
         });
+
+        // ✅ Load frames from backend
+        this.loadFramesFromBackend();
 
         this.init();
     }
 
-    // Konfigurasi area foto untuk setiap layout
+    /**
+     * ✅ NEW: Load frames from backend
+     */
+    loadFramesFromBackend() {
+        if (window.availableFrames && window.availableFrames.length > 0) {
+            console.log('✅ Loading frames from backend:', window.availableFrames);
+            
+            // Store frames grouped by photo count
+            window.availableFrames.forEach(frame => {
+                if (!this.backendFrames[frame.photo_count]) {
+                    this.backendFrames[frame.photo_count] = [];
+                }
+                this.backendFrames[frame.photo_count].push(frame);
+            });
+            
+            console.log('📦 Frames grouped by count:', this.backendFrames);
+        } else {
+            console.warn('⚠️ No frames loaded from backend, using fallback');
+            this.backendFrames = {};
+        }
+    }
+
+    /**
+     * ✅ NEW: Get frame path with priority system
+     */
+    getFramePath() {
+        // Priority 1: Use selected dynamic frame
+        if (this.useDynamicFrames && this.selectedFramePath) {
+            console.log('✅ Using dynamic frame:', this.selectedFramePath);
+            return this.selectedFramePath;
+        }
+
+        // Priority 2: Use backend frame
+        if (this.backendFrames && this.backendFrames[this.currentPhotoCount]) {
+            const frames = this.backendFrames[this.currentPhotoCount];
+            
+            // Find frame matching color
+            const matchingFrame = frames.find(f => f.color_code === this.selectedColor);
+            
+            if (matchingFrame) {
+                console.log('✅ Using backend frame:', matchingFrame.image_path);
+                return matchingFrame.image_path;
+            }
+            
+            // Fallback: use first frame
+            console.log('✅ Using first backend frame:', frames[0].image_path);
+            return frames[0].image_path;
+        }
+
+        // Priority 3: Fallback to old system
+        const fallbackPath = `/storage/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
+        console.warn('⚠️ Using fallback frame:', fallbackPath);
+        return fallbackPath;
+    }
+
+    // Frame configurations
     getFrameConfigs() {
         return {
             2: {
@@ -130,7 +192,6 @@ class PhotoBoothApp {
             this.currentPhotoCount = parseInt(e.target.value);
             this.frameType = `frame${this.currentPhotoCount}`;
             
-            // ✅ RESET strip saat ganti jumlah foto
             this.resetStrip();
             
             if (this.useDynamicFrames) {
@@ -189,7 +250,9 @@ class PhotoBoothApp {
         }
     }
 
-    // ✅ NEW: Reset strip state
+    /**
+     * ✅ Reset strip state
+     */
     resetStrip() {
         this.photos = [];
         this.currentStripId = null;
@@ -204,10 +267,12 @@ class PhotoBoothApp {
             saveBtn.style.display = 'none';
         }
         
-        console.log('Strip state reset');
+        console.log('✅ Strip state reset');
     }
 
-    // Setup dynamic frame selection
+    /**
+     * ✅ UPDATED: Setup dynamic frame selection
+     */
     setupDynamicFrameSelection() {
         console.log('Setting up dynamic frame selection...');
         const frameOptions = document.querySelectorAll('.frame-option');
@@ -216,14 +281,14 @@ class PhotoBoothApp {
         
         frameOptions.forEach((option, index) => {
             option.addEventListener('click', async () => {
-                console.log(`\nFrame ${index + 1} clicked`);
+                console.log(`\n📦 Frame ${index + 1} clicked`);
                 
                 document.querySelectorAll('.frame-option').forEach(opt => opt.classList.remove('active'));
                 option.classList.add('active');
                 
                 this.selectedFrameId = option.dataset.frameId;
                 this.selectedFramePath = option.dataset.framePath;
-                this.selectedColor = option.dataset.color;
+                this.selectedColor = option.dataset.color || 'brown';
                 
                 console.log('Frame selected:', {
                     id: this.selectedFrameId,
@@ -232,33 +297,14 @@ class PhotoBoothApp {
                     photoCount: option.dataset.photoCount
                 });
                 
-                // Test frame image loading
-                try {
-                    const testImg = new Image();
-                    testImg.crossOrigin = 'anonymous';
-                    
-                    testImg.onload = () => {
-                        console.log('✅ Frame image loaded successfully!');
-                    };
-                    
-                    testImg.onerror = (error) => {
-                        console.error('❌ Frame image failed to load!');
-                        console.error('URL:', this.selectedFramePath);
-                        alert(`Frame tidak dapat dimuat!\nURL: ${this.selectedFramePath}\n\nPastikan:\n1. File frame ada di storage/app/public/frames/\n2. Symlink storage sudah dibuat\n3. File permission OK`);
-                    };
-                    
-                    testImg.src = this.selectedFramePath;
-                    
-                } catch (error) {
-                    console.error('Error testing frame load:', error);
-                }
+                // ✅ Test frame loading
+                await this.testFrameLoad(this.selectedFramePath);
                 
-                // ✅ Update preview jika sudah ada foto
+                // Update preview if photos exist
                 if (this.photos.length > 0) {
                     console.log('Updating preview with new frame...');
                     await this.updateStripPreview();
                     
-                    // ✅ Re-compose strip dengan frame baru (tapi jangan simpan lagi)
                     if (this.currentStripId && this.photos.length === this.currentPhotoCount) {
                         console.log('Re-composing strip with new frame...');
                         await this.composeAndUpdateStrip();
@@ -272,8 +318,62 @@ class PhotoBoothApp {
             console.log('Auto-selecting first frame...');
             firstFrame.click();
         } else {
-            console.warn('⚠️ No frame options found to auto-select!');
+            console.warn('⚠️ No frame options found!');
         }
+    }
+
+    /**
+     * ✅ NEW: Test frame loading
+     */
+    async testFrameLoad(framePath) {
+        try {
+            console.log(`🔍 Testing frame load: ${framePath}`);
+            
+            const testImg = new Image();
+            testImg.crossOrigin = 'anonymous';
+            
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    console.error('⏱️ Frame load timeout');
+                    reject(new Error('Timeout'));
+                }, 5000);
+                
+                testImg.onload = () => {
+                    clearTimeout(timeout);
+                    console.log('✅ Frame loaded successfully!');
+                    resolve(true);
+                };
+                
+                testImg.onerror = (error) => {
+                    clearTimeout(timeout);
+                    console.error('❌ Frame load failed!');
+                    console.error('Path:', framePath);
+                    
+                    this.showFrameError(framePath, error);
+                    reject(error);
+                };
+                
+                testImg.src = framePath;
+            });
+        } catch (error) {
+            console.error('Frame test error:', error);
+        }
+    }
+
+    /**
+     * ✅ NEW: Show user-friendly frame error
+     */
+    showFrameError(framePath, error) {
+        const errorMsg = `❌ Frame tidak dapat dimuat!\n\n` +
+                        `Path: ${framePath}\n\n` +
+                        `Kemungkinan penyebab:\n` +
+                        `1. File tidak ada di storage/app/public/frames/\n` +
+                        `2. Symlink belum dibuat (php artisan storage:link)\n` +
+                        `3. Nama file salah (case-sensitive)\n` +
+                        `4. File permission tidak OK\n\n` +
+                        `Cek browser console (F12) untuk detail.`;
+        
+        alert(errorMsg);
     }
 
     setupColorSelection() {
@@ -286,7 +386,6 @@ class PhotoBoothApp {
                 
                 await this.updateStripPreview();
                 
-                // ✅ Update strip jika sudah ada
                 if (this.photos.length > 0 && this.currentStripId) {
                     await this.composeAndUpdateStrip();
                 }
@@ -297,7 +396,6 @@ class PhotoBoothApp {
     async startPhotoSession() {
         if (this.isCapturing) return;
 
-        // ✅ Jika bukan retake, reset state
         if (this.retakingIndex === null) {
             this.resetStrip();
         }
@@ -309,7 +407,7 @@ class PhotoBoothApp {
         const btn = document.getElementById('startPhotoBtn');
         btn.disabled = true;
 
-        // ✅ Handle retake foto tunggal
+        // Handle retake
         if (this.retakingIndex !== null) {
             await this.capturePhoto(this.retakingIndex + 1);
             
@@ -321,7 +419,6 @@ class PhotoBoothApp {
             this.closeRetakeModal();
             this.showReviewModal();
             
-            // ✅ Update strip (bukan save baru)
             await this.composeAndUpdateStrip();
             
             this.retakingIndex = null;
@@ -329,7 +426,7 @@ class PhotoBoothApp {
             return;
         }
 
-        // ✅ Capture semua foto
+        // Capture all photos
         for (let i = 0; i < this.currentPhotoCount; i++) {
             await this.capturePhoto(i + 1);
             await this.wait(1000);
@@ -340,7 +437,7 @@ class PhotoBoothApp {
         
         this.showReviewModal();
         
-        // ✅ PENTING: Simpan hanya SEKALI setelah semua foto selesai
+        // ✅ Save strip once
         await this.composeAndSaveStrip();
     }
 
@@ -469,21 +566,21 @@ class PhotoBoothApp {
         }
     }
 
-    // ✅ METHOD BARU: Compose dan SAVE strip (hanya 1x)
+    /**
+     * ✅ Compose and SAVE strip (once only)
+     */
     async composeAndSaveStrip() {
-        // ✅ Cek apakah sudah pernah disimpan
         if (this.isStripSaved) {
-            console.log('Strip sudah pernah disimpan, skip...');
+            console.log('Strip already saved, skipping...');
             return;
         }
 
-        // ✅ Cek apakah foto sudah lengkap
         if (this.photos.length !== this.currentPhotoCount) {
-            console.log(`Foto belum lengkap: ${this.photos.length}/${this.currentPhotoCount}`);
+            console.log(`Photos incomplete: ${this.photos.length}/${this.currentPhotoCount}`);
             return;
         }
 
-        console.log('\nCreating and saving final strip...');
+        console.log('\n🎨 Creating and saving final strip...');
 
         try {
             const downloadBtn = document.getElementById('downloadBtn');
@@ -497,16 +594,14 @@ class PhotoBoothApp {
             const finalCanvas = await this.createFinalCanvasWithCustomFrame();
             const finalImageData = finalCanvas.toDataURL('image/png');
             
-            // ✅ SIMPAN KE SERVER (HANYA 1 KALI)
             await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
             
-            // ✅ Tandai sudah disimpan
             this.isStripSaved = true;
-            console.log('Strip berhasil disimpan!');
+            console.log('✅ Strip saved successfully!');
 
         } catch (error) {
-            console.error('Error composing strip:', error);
-            alert('Terjadi kesalahan saat membuat photo strip: ' + error.message);
+            console.error('❌ Error composing strip:', error);
+            alert('Terjadi kesalahan: ' + error.message);
             
             const downloadBtn = document.getElementById('downloadBtn');
             if (downloadBtn) {
@@ -516,23 +611,24 @@ class PhotoBoothApp {
         }
     }
 
-    // METHOD BARU: Update strip yang sudah ada (tidak save baru)
+    /**
+     * ✅ Update existing strip (no new save)
+     */
     async composeAndUpdateStrip() {
         if (!this.currentStripId) {
-            console.log('No strip ID, calling composeAndSaveStrip instead...');
+            console.log('No strip ID, saving new strip...');
             await this.composeAndSaveStrip();
             return;
         }
 
-        console.log('\nUpdating existing strip...');
+        console.log('\n🔄 Updating existing strip...');
 
         try {
             const finalCanvas = await this.createFinalCanvasWithCustomFrame();
             const finalImageData = finalCanvas.toDataURL('image/png');
             
-            // UPDATE strip yang sudah ada (PUT/PATCH request)
             const response = await fetch(`/photobooth/update-strip/${this.currentStripId}`, {
-                method: 'POST', // Atau PUT jika route mendukung
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': window.csrfToken
@@ -547,17 +643,17 @@ class PhotoBoothApp {
             const result = await response.json();
             
             if (result.success) {
-                console.log('Strip updated successfully!');
+                console.log('✅ Strip updated successfully!');
                 this.currentStripUrl = result.strip_url;
             }
 
         } catch (error) {
-            console.error('Error updating strip:', error);
+            console.error('❌ Error updating strip:', error);
         }
     }
 
     async sendToServer(finalImageData, downloadBtn, originalDownloadText) {
-        console.log('Sending strip to server...');
+        console.log('📤 Sending strip to server...');
         
         const response = await fetch('/photobooth/compose', {
             method: 'POST',
@@ -566,7 +662,7 @@ class PhotoBoothApp {
                 'X-CSRF-TOKEN': window.csrfToken
             },
             body: JSON.stringify({
-                image: finalImageData, // Kirim final image, bukan array
+                image: finalImageData,
                 frame_id: this.useDynamicFrames ? this.selectedFrameId : null,
                 photo_count: this.currentPhotoCount
             })
@@ -578,10 +674,9 @@ class PhotoBoothApp {
             this.currentStripId = result.strip_id;
             this.currentStripUrl = result.strip_url;
             
-            console.log('Strip created:', {
+            console.log('✅ Strip created:', {
                 id: this.currentStripId,
-                url: this.currentStripUrl,
-                frame_id: this.selectedFrameId
+                url: this.currentStripUrl
             });
             
             this.showSaveButton();
@@ -595,9 +690,11 @@ class PhotoBoothApp {
         }
     }
 
-    // Create final canvas dengan frame
+    /**
+     * ✅ UPDATED: Create final canvas with improved frame loading
+     */
     async createFinalCanvasWithCustomFrame() {
-        console.log('\nCreating final canvas with frame...');
+        console.log('\n🎨 Creating final canvas...');
         
         const tempCanvas = document.createElement('canvas');
         const ctx = tempCanvas.getContext('2d');
@@ -605,57 +702,53 @@ class PhotoBoothApp {
         const config = this.frameConfigs[this.currentPhotoCount];
         
         if (!config) {
-            throw new Error(`Konfigurasi tidak ditemukan untuk ${this.currentPhotoCount} foto`);
+            throw new Error(`Config not found for ${this.currentPhotoCount} photos`);
         }
-
-        console.log('Canvas config:', config);
 
         tempCanvas.width = config.frameSize.width;
         tempCanvas.height = config.frameSize.height;
 
+        // White background
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
-        console.log(`Drawing ${this.photos.length} photos...`);
-
+        // Draw photos
+        console.log(`📸 Drawing ${this.photos.length} photos...`);
         for (let i = 0; i < this.photos.length; i++) {
-            const photoImg = await this.loadImage(this.photos[i]);
-            const area = config.photoAreas[i];
-            
-            if (!area) {
-                console.warn(`Area foto ${i + 1} tidak ditemukan`);
-                continue;
+            try {
+                const photoImg = await this.loadImage(this.photos[i]);
+                const area = config.photoAreas[i];
+                
+                if (!area) {
+                    console.warn(`⚠️ Photo area ${i} not found`);
+                    continue;
+                }
+                
+                this.drawImageCover(ctx, photoImg, area.x, area.y, area.width, area.height);
+                console.log(`✅ Photo ${i + 1} drawn`);
+            } catch (error) {
+                console.error(`❌ Failed to draw photo ${i}:`, error);
             }
-            
-            console.log(`Drawing photo ${i + 1} at:`, area);
-            this.drawImageCover(ctx, photoImg, area.x, area.y, area.width, area.height);
         }
 
-        let framePath;
-        
-        if (this.useDynamicFrames && this.selectedFramePath) {
-            framePath = this.selectedFramePath;
-            console.log('Using dynamic frame:', framePath);
-        } else {
-            framePath = `/storage/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
-            console.log('Using fallback frame:', framePath);
-        }
-        
-        console.log(`Loading frame from: ${framePath}`);
+        // ✅ Get frame path
+        const framePath = this.getFramePath();
+        console.log(`📥 Loading frame: ${framePath}`);
         
         try {
             const frameImg = await this.loadImage(framePath);
-            console.log('Frame image loaded, drawing on canvas...');
+            console.log('✅ Frame loaded');
+            
             ctx.drawImage(frameImg, 0, 0, tempCanvas.width, tempCanvas.height);
-            console.log('Frame drawn successfully!');
+            console.log('✅ Frame drawn');
+            
         } catch (error) {
-            console.error('Error loading frame:', error);
-            console.error('Frame path:', framePath);
-            alert(`Frame tidak dapat dimuat!\n\nPath: ${framePath}\n\nPastikan:\n1. File ada di: storage/app/public/frames/\n2. Symlink dibuat: php artisan storage:link\n3. File accessible via: ${window.location.origin}${framePath}`);
+            console.error('❌ Frame load error:', error);
+            this.showFrameError(framePath, error);
             throw error;
         }
 
-        console.log('Final canvas created successfully!');
+        console.log('✅ Final canvas complete!');
         return tempCanvas;
     }
 
@@ -695,7 +788,7 @@ class PhotoBoothApp {
 
     async saveStripToProfile() {
         if (!this.currentStripId) {
-            alert('Strip ID tidak ditemukan! Silakan tunggu hingga proses selesai.');
+            alert('Strip ID tidak ditemukan!');
             return;
         }
 
@@ -722,10 +815,10 @@ class PhotoBoothApp {
             const result = await response.json();
             
             if (result.success) {
-                alert('' + result.message);
+                alert('✅ ' + result.message);
                 window.location.href = '/profile';
             } else {
-                alert('' + result.message);
+                alert('❌ ' + result.message);
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = originalText;
             }
@@ -777,13 +870,7 @@ class PhotoBoothApp {
             this.drawImageCover(ctx, photoImg, scaledArea.x, scaledArea.y, scaledArea.width, scaledArea.height);
         }
 
-        let framePath;
-        
-        if (this.useDynamicFrames && this.selectedFramePath) {
-            framePath = this.selectedFramePath;
-        } else {
-            framePath = `/storage/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
-        }
+        const framePath = this.getFramePath();
         
         try {
             const frameImg = await this.loadImage(framePath);
@@ -797,34 +884,75 @@ class PhotoBoothApp {
         if (this.currentStripId) {
             window.location.href = `/photobooth/download/${this.currentStripId}`;
         } else {
-            alert('Photo strip belum siap. Silakan tunggu sebentar...');
+            alert('Photo strip belum siap. Silakan tunggu...');
         }
     }
 
-    // Load image dengan cache busting
+    /**
+     * ✅ UPDATED: Load image with better error handling
+     */
     loadImage(src) {
         return new Promise((resolve, reject) => {
+            console.log(`🔍 Loading: ${src}`);
+            
             const img = new Image();
             img.crossOrigin = 'anonymous';
             
             const timeout = setTimeout(() => {
-                console.error(`Timeout loading: ${src}`);
-                reject(new Error('Image loading timeout (10s): ' + src));
+                console.error(`⏱️ Timeout: ${src}`);
+                reject(new Error('Timeout: ' + src));
             }, 10000);
             
             img.onload = () => {
                 clearTimeout(timeout);
+                console.log(`✅ Loaded: ${src}`);
                 resolve(img);
             };
             
-            img.onerror = (error) => {
+            img.onerror = (event) => {
                 clearTimeout(timeout);
-                console.error(`Failed to load: ${src}`);
-                reject(new Error('Failed to load image: ' + src));
+                console.error(`❌ Failed: ${src}`);
+                console.error('Error:', event);
+                
+                // ✅ Retry without cache buster
+                if (src.includes('?v=')) {
+                    const cleanSrc = src.split('?')[0];
+                    console.log(`🔄 Retry: ${cleanSrc}`);
+                    
+                    const retryImg = new Image();
+                    retryImg.crossOrigin = 'anonymous';
+                    
+                    retryImg.onload = () => {
+                        console.log(`✅ Retry success: ${cleanSrc}`);
+                        resolve(retryImg);
+                    };
+                    
+                    retryImg.onerror = () => {
+                        console.error(`❌ Retry failed: ${cleanSrc}`);
+                        
+                        // Last try without CORS
+                        const finalImg = new Image();
+                        finalImg.onload = () => {
+                            console.log(`✅ Loaded (no CORS): ${cleanSrc}`);
+                            resolve(finalImg);
+                        };
+                        finalImg.onerror = () => {
+                            console.error(`❌ All attempts failed`);
+                            reject(new Error('Failed: ' + src));
+                        };
+                        finalImg.src = cleanSrc;
+                    };
+                    
+                    retryImg.src = cleanSrc;
+                } else {
+                    reject(new Error('Failed: ' + src));
+                }
             };
             
-            // Add cache busting for frame images
-            if (src.includes('/storage/frames/')) {
+            // ✅ Handle different URL types
+            if (src.startsWith('http://') || src.startsWith('https://')) {
+                img.src = src; // Full URL from backend
+            } else if (src.includes('/storage/frames/')) {
                 img.src = src + '?v=' + Date.now();
             } else {
                 img.src = src;
@@ -837,12 +965,14 @@ class PhotoBoothApp {
     }
 }
 
-// Initialize PhotoBooth App
+// Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    new PhotoBoothApp();
+    console.log('🚀 Initializing PhotoBoothApp...');
+    window.photoboothApp = new PhotoBoothApp();
+    console.log('✅ PhotoBoothApp initialized');
 });
 
-// Global helper functions
+// Global helpers
 function closeLoginModal() {
     const modal = document.getElementById('loginModal');
     if (modal) {

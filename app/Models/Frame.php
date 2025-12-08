@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class Frame extends Model
 {
@@ -18,35 +19,19 @@ class Frame extends Model
         'color_code',
         'photo_count',
         'is_active',
-        'is_default', // NEW
+        'is_default',
         'uploaded_by',
         'usage_count',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
-        'is_default' => 'boolean', // NEW
+        'is_default' => 'boolean',
         'photo_count' => 'integer',
         'usage_count' => 'integer',
     ];
 
-    // Scopes
-    public function scopeActive($query)
-    {
-        return $query->where('is_active', true);
-    }
-
-    public function scopeDefault($query)
-    {
-        return $query->where('is_default', true);
-    }
-
-    public function scopeCustom($query)
-    {
-        return $query->where('is_default', false);
-    }
-
-    // Relationships
+    // ✅ Relationships
     public function category()
     {
         return $this->belongsTo(Category::class);
@@ -62,32 +47,112 @@ class Frame extends Model
         return $this->hasMany(PhotoStrip::class, 'frame_id');
     }
 
-    // Accessors
+    // ✅ FIXED: Image URL with comprehensive fallback handling
     public function getImageUrlAttribute()
     {
-        if ($this->image_path) {
+        if (!$this->image_path) {
+            Log::warning('Frame has no image_path', ['frame_id' => $this->id]);
+            return asset('images/placeholder-frame.png');
+        }
+
+        $basename = basename($this->image_path);
+        
+        // Try 1: asset() storage path (via symlink)
+        $storagePath = 'storage/frames/' . $basename;
+        if (file_exists(public_path($storagePath))) {
+            return asset($storagePath);
+        }
+        
+        // Try 2: public/frames direct
+        if (file_exists(public_path('frames/' . $basename))) {
+            return asset('frames/' . $basename);
+        }
+        
+        // Try 3: Storage disk check
+        if (Storage::disk('public')->exists($this->image_path)) {
             return Storage::url($this->image_path);
         }
-        return null;
+
+        Log::warning('Frame image not found in any location', [
+            'frame_id' => $this->id,
+            'image_path' => $this->image_path,
+            'basename' => $basename,
+            'checked_paths' => [
+                'storage' => public_path($storagePath),
+                'public_frames' => public_path('frames/' . $basename),
+                'disk' => Storage::disk('public')->exists($this->image_path),
+            ]
+        ]);
+        
+        return asset('images/placeholder-frame.png');
     }
 
-    // Check if frame can be deleted
-    public function canBeDeleted(): bool
+    // ✅ NEW: Get full system path
+    public function getFullPathAttribute()
     {
-        // Default frames cannot be deleted
-        if ($this->is_default) {
+        return storage_path('app/public/' . $this->image_path);
+    }
+
+    // ✅ FIXED: Comprehensive image existence check
+    public function imageExists(): bool
+    {
+        if (!$this->image_path) {
             return false;
         }
 
-        // Custom frames can be deleted if not in use
+        $basename = basename($this->image_path);
+
+        // Check storage/frames/ (via symlink)
+        if (file_exists(public_path('storage/frames/' . $basename))) {
+            return true;
+        }
+
+        // Check public/frames/ direct
+        if (file_exists(public_path('frames/' . $basename))) {
+            return true;
+        }
+
+        // Check Storage disk
+        if (Storage::disk('public')->exists($this->image_path)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    // ✅ Can be deleted?
+    public function canBeDeleted(): bool
+    {
+        if ($this->is_default) {
+            return false;
+        }
         return $this->photoStrips()->count() === 0;
     }
 
-    // Check if frame can be edited
+    // ✅ Can be edited?
     public function canBeEdited(): bool
     {
-        // Default frames can only toggle active status and update description
-        // Custom frames can be fully edited
         return true;
+    }
+
+    // ✅ Scopes
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeDefault($query)
+    {
+        return $query->where('is_default', true);
+    }
+
+    public function scopeCustom($query)
+    {
+        return $query->where('is_default', false);
+    }
+
+    public function scopeForPhotoCount($query, $count)
+    {
+        return $query->where('photo_count', $count);
     }
 }
