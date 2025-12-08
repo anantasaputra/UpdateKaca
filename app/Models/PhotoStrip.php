@@ -12,23 +12,25 @@ class PhotoStrip extends Model
 
     protected $fillable = [
         'user_id',
+        'guest_session_id', // ✅ NEW: Track guest sessions
         'frame_id',
         'photo_data',
         'final_image_path',
         'photo_count',
         'ip_address',
-        'is_saved',  // TAMBAHKAN INI
+        'is_saved', // ✅ NEW: Track if user saved to profile
     ];
 
     protected $casts = [
         'photo_data' => 'array',
         'photo_count' => 'integer',
-        'is_saved' => 'boolean',  // TAMBAHKAN INI
+        'is_saved' => 'boolean', // ✅ NEW
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
 
-    // Relationships
+    // ===== RELATIONSHIPS =====
+
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -39,7 +41,8 @@ class PhotoStrip extends Model
         return $this->belongsTo(Frame::class);
     }
 
-    // Accessors
+    // ===== ACCESSORS =====
+
     public function getImageUrlAttribute()
     {
         return Storage::url($this->final_image_path);
@@ -50,14 +53,79 @@ class PhotoStrip extends Model
         return storage_path('app/public/' . $this->final_image_path);
     }
 
-    // Delete with file cleanup
+    /**
+     * ✅ NEW: Check if this strip belongs to a guest
+     */
+    public function getIsGuestAttribute()
+    {
+        return is_null($this->user_id) && !is_null($this->guest_session_id);
+    }
+
+    /**
+     * ✅ NEW: Get user display name (user name or "Guest")
+     */
+    public function getUserDisplayNameAttribute()
+    {
+        if ($this->user) {
+            return $this->user->name;
+        }
+        
+        return 'Guest (' . substr($this->guest_session_id, 0, 8) . ')';
+    }
+
+    // ===== SCOPES =====
+
+    /**
+     * ✅ NEW: Scope untuk filter strip yang disimpan
+     */
+    public function scopeSaved($query)
+    {
+        return $query->where('is_saved', true);
+    }
+
+    /**
+     * ✅ NEW: Scope untuk filter strip temporary (belum disimpan)
+     */
+    public function scopeUnsaved($query)
+    {
+        return $query->where('is_saved', false);
+    }
+
+    /**
+     * ✅ NEW: Scope untuk registered users
+     */
+    public function scopeRegisteredUsers($query)
+    {
+        return $query->whereNotNull('user_id');
+    }
+
+    /**
+     * ✅ NEW: Scope untuk guests
+     */
+    public function scopeGuests($query)
+    {
+        return $query->whereNull('user_id')
+            ->whereNotNull('guest_session_id');
+    }
+
+    // ===== MODEL EVENTS =====
+
+    /**
+     * ✅ UPDATED: Delete with file cleanup
+     */
     public static function boot()
     {
         parent::boot();
 
+        // Auto-delete file saat record dihapus
         static::deleting(function ($strip) {
-            if (Storage::disk('public')->exists($strip->final_image_path)) {
+            if ($strip->final_image_path && Storage::disk('public')->exists($strip->final_image_path)) {
                 Storage::disk('public')->delete($strip->final_image_path);
+                
+                \Log::info('Photo strip file deleted', [
+                    'strip_id' => $strip->id,
+                    'path' => $strip->final_image_path,
+                ]);
             }
         });
     }

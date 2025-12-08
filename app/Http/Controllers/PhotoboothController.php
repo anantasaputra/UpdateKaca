@@ -107,23 +107,44 @@ class PhotoboothController extends Controller
     }
 
     /**
-     * Compose photo strip with selected frame
+     * ✅ UPDATED: Compose photo strip with selected frame
+     * Simpan HANYA 1 RECORD per session
      */
     public function composeStrip(Request $request)
     {
         $request->validate([
-            'photos' => 'required|array|min:1',
-            'photos.*' => 'required|string',
+            'image' => 'required|string', // ✅ Changed from 'photos' array to single 'image'
             'frame_id' => 'nullable|exists:frames,id',
             'photo_count' => 'required|integer|in:2,3,4',
         ]);
 
         try {
-            $photos = $request->input('photos');
+            $imageData = $request->input('image'); // ✅ Single final canvas image
             $frameId = $request->input('frame_id');
             $photoCount = $request->input('photo_count');
+            $userId = auth()->id();
+            $guestSessionId = $userId ? null : session()->getId();
+
+            // ✅ PENTING: Cek apakah user/guest sudah punya strip yang belum disimpan
+            // Jika ada, hapus yang lama untuk menghindari duplikasi
+            if ($userId) {
+                PhotoStrip::where('user_id', $userId)
+                    ->where('is_saved', false)
+                    ->where('photo_count', $photoCount)
+                    ->delete();
+                    
+                Log::info('Deleted old unsaved strips for user', ['user_id' => $userId]);
+            } else {
+                PhotoStrip::where('guest_session_id', $guestSessionId)
+                    ->where('is_saved', false)
+                    ->where('photo_count', $photoCount)
+                    ->delete();
+                    
+                Log::info('Deleted old unsaved strips for guest', ['session_id' => $guestSessionId]);
+            }
 
             // Validate frame if provided
+            $frame = null;
             if ($frameId) {
                 $frame = Frame::where('id', $frameId)
                     ->where('is_active', true)
@@ -142,81 +163,75 @@ class PhotoboothController extends Controller
                 ]);
             }
 
-            // Final canvas from frontend (already includes frame overlay)
-            if (count($photos) === 1 && strpos($photos[0], 'data:image') === 0) {
-                $imageData = $photos[0];
-                
-                // Extract and decode
-                if (preg_match('/^data:image\/(\w+);base64,/', $imageData, $type)) {
-                    $imageData = substr($imageData, strpos($imageData, ',') + 1);
-                } else {
-                    return response()->json(['error' => 'Invalid image format'], 400);
-                }
-                
-                $imageData = base64_decode($imageData);
-                
-                if ($imageData === false) {
-                    return response()->json(['error' => 'Base64 decode failed'], 400);
-                }
+            // Extract and decode base64 image
+            if (preg_match('/^data:image\/(\w+);base64,/', $imageData, $type)) {
+                $imageData = substr($imageData, strpos($imageData, ',') + 1);
+            } else {
+                return response()->json(['error' => 'Invalid image format'], 400);
+            }
+            
+            $imageData = base64_decode($imageData);
+            
+            if ($imageData === false) {
+                return response()->json(['error' => 'Base64 decode failed'], 400);
+            }
 
-                // Generate unique strip filename
-                $stripFilename = 'strip_' . time() . '_' . Str::random(10) . '.png';
-                $stripPath = 'strips/' . $stripFilename;
+            // Generate unique strip filename
+            $stripFilename = 'strip_' . time() . '_' . Str::random(10) . '.png';
+            $stripPath = 'strips/' . $stripFilename;
 
-                // Ensure strips directory exists
-                if (!Storage::disk('public')->exists('strips')) {
-                    Storage::disk('public')->makeDirectory('strips');
-                }
+            // Ensure strips directory exists
+            if (!Storage::disk('public')->exists('strips')) {
+                Storage::disk('public')->makeDirectory('strips');
+            }
 
-                // Save strip image
-                $saved = Storage::disk('public')->put($stripPath, $imageData);
+            // Save strip image
+            $saved = Storage::disk('public')->put($stripPath, $imageData);
 
-                if (!$saved) {
-                    throw new \Exception('Failed to save strip image');
-                }
+            if (!$saved) {
+                throw new \Exception('Failed to save strip image');
+            }
 
-                // Increment frame usage if frame is used
-                if ($frameId && isset($frame)) {
-                    $frame->increment('usage_count');
-                    Log::info('Frame usage incremented', [
-                        'frame_id' => $frame->id,
-                        'new_usage_count' => $frame->usage_count,
-                    ]);
-                }
-
-                // Create photo strip record
-                $photoStrip = PhotoStrip::create([
-                    'user_id' => auth()->id(),
-                    'frame_id' => $frameId,
-                    'photo_data' => ['final_canvas'],
-                    'final_image_path' => $stripPath,
-                    'photo_count' => $photoCount,
-                    'ip_address' => $request->ip(),
-                    'is_saved' => false,
-                ]);
-
-                Log::info('Photo strip created successfully', [
-                    'strip_id' => $photoStrip->id,
-                    'frame_id' => $frameId,
-                    'photo_count' => $photoCount,
-                    'user_id' => auth()->id(),
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'strip_url' => Storage::url($stripPath),
-                    'strip_id' => $photoStrip->id,
-                    'download_url' => route('photobooth.download', $photoStrip->id),
-                    'is_authenticated' => auth()->check(),
+            // Increment frame usage if frame is used
+            if ($frameId && $frame) {
+                $frame->increment('usage_count');
+                Log::info('Frame usage incremented', [
+                    'frame_id' => $frame->id,
+                    'new_usage_count' => $frame->usage_count,
                 ]);
             }
 
-            // Fallback for invalid data
-            Log::warning('Invalid photo data format received');
-            return response()->json(['error' => 'Invalid photo data format'], 400);
+            // ✅ PENTING: Create HANYA 1 photo strip record per session
+            $photoStrip = PhotoStrip::create([
+                'user_id' => $userId,
+                'guest_session_id' => $guestSessionId,
+                'frame_id' => $frameId,
+                'photo_data' => ['final_canvas'], // Metadata
+                'final_image_path' => $stripPath,
+                'photo_count' => $photoCount,
+                'ip_address' => $request->ip(),
+                'is_saved' => false, // ✅ Default false untuk tracking
+            ]);
+
+            Log::info('✅ Photo strip created successfully (SINGLE RECORD)', [
+                'strip_id' => $photoStrip->id,
+                'frame_id' => $frameId,
+                'photo_count' => $photoCount,
+                'user_id' => $userId,
+                'guest_session_id' => $guestSessionId,
+                'is_saved' => false,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'strip_url' => Storage::url($stripPath),
+                'strip_id' => $photoStrip->id,
+                'download_url' => route('photobooth.download', $photoStrip->id),
+                'is_authenticated' => auth()->check(),
+            ]);
 
         } catch (\Exception $e) {
-            Log::error('Error composing strip', [
+            Log::error('❌ Error composing strip', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -228,7 +243,81 @@ class PhotoboothController extends Controller
     }
 
     /**
-     * Save strip to user profile
+     * ✅ NEW: Update existing strip (untuk ganti frame/retake)
+     */
+    public function updateStrip(Request $request, $id)
+    {
+        $request->validate([
+            'image' => 'required|string',
+            'frame_id' => 'nullable|exists:frames,id',
+            'photo_count' => 'required|integer|in:2,3,4',
+        ]);
+
+        try {
+            $strip = PhotoStrip::findOrFail($id);
+
+            // Check ownership
+            if ($strip->user_id && $strip->user_id !== auth()->id()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized access.'
+                ], 403);
+            }
+
+            $imageData = $request->input('image');
+
+            // Extract and decode base64 image
+            if (preg_match('/^data:image\/(\w+);base64,/', $imageData, $type)) {
+                $imageData = substr($imageData, strpos($imageData, ',') + 1);
+            } else {
+                return response()->json(['error' => 'Invalid image format'], 400);
+            }
+            
+            $imageData = base64_decode($imageData);
+
+            // Delete old file
+            if (Storage::disk('public')->exists($strip->final_image_path)) {
+                Storage::disk('public')->delete($strip->final_image_path);
+            }
+
+            // Generate new filename
+            $stripFilename = 'strip_' . time() . '_' . Str::random(10) . '.png';
+            $stripPath = 'strips/' . $stripFilename;
+
+            // Save new image
+            Storage::disk('public')->put($stripPath, $imageData);
+
+            // Update record
+            $strip->update([
+                'frame_id' => $request->input('frame_id'),
+                'final_image_path' => $stripPath,
+                'photo_count' => $request->input('photo_count'),
+            ]);
+
+            Log::info('✅ Photo strip updated', [
+                'strip_id' => $strip->id,
+                'new_frame_id' => $request->input('frame_id'),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'strip_url' => Storage::url($stripPath),
+                'strip_id' => $strip->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error updating strip', [
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ UPDATED: Save strip to user profile
      */
     public function saveStrip(Request $request, $id)
     {
@@ -242,7 +331,7 @@ class PhotoboothController extends Controller
         try {
             $strip = PhotoStrip::findOrFail($id);
             
-            // Check ownership
+            // Check ownership or guest session
             if ($strip->user_id && $strip->user_id !== auth()->id()) {
                 return response()->json([
                     'success' => false,
@@ -250,15 +339,17 @@ class PhotoboothController extends Controller
                 ], 403);
             }
 
-            // Update strip
+            // ✅ Update strip: assign to user dan mark as saved
             $strip->update([
                 'user_id' => auth()->id(),
+                'guest_session_id' => null, // Clear guest session
                 'is_saved' => true,
             ]);
 
-            Log::info('Photo strip saved to user profile', [
+            Log::info('✅ Photo strip saved to user profile', [
                 'strip_id' => $id,
                 'user_id' => auth()->id(),
+                'is_saved' => true,
             ]);
 
             return response()->json([
@@ -272,7 +363,7 @@ class PhotoboothController extends Controller
                 'message' => 'Photo strip tidak ditemukan.'
             ], 404);
         } catch (\Exception $e) {
-            Log::error('Error saving strip', [
+            Log::error('❌ Error saving strip', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
