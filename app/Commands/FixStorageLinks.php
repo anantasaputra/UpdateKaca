@@ -29,9 +29,9 @@ class FixStorageLinks extends Command
         if (File::exists($publicStorage)) {
             if (is_link($publicStorage)) {
                 File::delete($publicStorage);
-                $this->info('✅ Removed old storage symlink');
+                $this->info('Removed old storage symlink');
             } else {
-                $this->warn('⚠️  public/storage exists but is not a symlink!');
+                $this->warn('public/storage exists but is not a symlink!');
             }
         }
         
@@ -39,15 +39,15 @@ class FixStorageLinks extends Command
         $target = storage_path('app/public');
         if (!File::exists($target)) {
             File::makeDirectory($target, 0755, true);
-            $this->info('✅ Created storage/app/public directory');
+            $this->info('Created storage/app/public directory');
         }
         
         try {
             File::link($target, $publicStorage);
-            $this->info('✅ Created storage symlink: public/storage -> storage/app/public');
+            $this->info('Created storage symlink: public/storage -> storage/app/public');
         } catch (\Exception $e) {
-            $this->error('❌ Failed to create symlink: ' . $e->getMessage());
-            $this->warn('💡 Try running: ln -s ' . $target . ' ' . $publicStorage);
+            $this->error('Failed to create symlink: ' . $e->getMessage());
+            $this->warn('Try running: ln -s ' . $target . ' ' . $publicStorage);
         }
         
         // 3. Create required directories
@@ -60,33 +60,33 @@ class FixStorageLinks extends Command
         foreach ($directories as $dir) {
             if (!File::exists($dir)) {
                 File::makeDirectory($dir, 0755, true);
-                $this->info("✅ Created directory: {$dir}");
+                $this->info("Created directory: {$dir}");
             } else {
-                $this->comment("📁 Directory already exists: {$dir}");
+                $this->comment("Directory already exists: {$dir}");
             }
         }
         
         // 4. Verify everything
         $this->info('');
-        $this->info('🔍 Verifying setup...');
+        $this->info('Verifying setup...');
         
         if (is_link($publicStorage)) {
-            $this->info('✅ Symlink exists: public/storage');
+            $this->info('Symlink exists: public/storage');
         } else {
-            $this->error('❌ Symlink not created properly');
+            $this->error('Symlink not created properly');
         }
         
         foreach ($directories as $dir) {
             if (File::exists($dir) && File::isWritable($dir)) {
-                $this->info('✅ Directory OK: ' . basename($dir));
+                $this->info('Directory OK: ' . basename($dir));
             } else {
-                $this->error('❌ Directory issue: ' . basename($dir));
+                $this->error('Directory issue: ' . basename($dir));
             }
         }
         
         $this->info('');
-        $this->info('🎉 Storage links fixed successfully!');
-        $this->warn('⚠️  Next steps:');
+        $this->info('Storage links fixed successfully!');
+        $this->warn('Next steps:');
         $this->warn('   1. Copy your frame files to: storage/app/public/frames/');
         $this->warn('   2. Run: php artisan migrate:fresh --seed');
         

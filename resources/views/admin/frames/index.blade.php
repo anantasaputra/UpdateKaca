@@ -87,7 +87,7 @@
                         <i class="bi bi-palette"></i> {{ ucfirst($frame->color_code) }}
                     </span>
                     <span class="badge bg-info me-1">
-                        <i class="bi bi-graph-up"></i> {{ $frame->usage_count ?? 0 }} uses
+                        <i class="bi bi-graph-up"></i> {{ $frame->photo_strips_count ?? 0 }} uses
                     </span>
                     @if($frame->is_active)
                         <span class="badge bg-success">Active</span>
@@ -114,19 +114,27 @@
                         </button>
                     </form>
                     
-                    {{-- Delete Button (Disabled for default frames) --}}
-                    <form action="{{ route('admin.frames.destroy', $frame) }}" 
-                          method="POST" 
-                          onsubmit="return confirmDelete('{{ addslashes($frame->name) }}', {{ $frame->is_default ? 'true' : 'false' }}, {{ $frame->photo_strips_count ?? 0 }})">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" 
+                    {{-- FIXED: Delete Button (Hanya untuk Custom Frame yang tidak digunakan) --}}
+                    @if(!$frame->is_default && ($frame->photo_strips_count ?? 0) == 0)
+                        <form action="{{ route('admin.frames.destroy', $frame) }}" 
+                              method="POST" 
+                              onsubmit="return confirmDelete('{{ addslashes($frame->name) }}')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" 
+                                    class="btn btn-sm btn-outline-danger"
+                                    title="Delete frame">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    @else
+                        <button type="button" 
                                 class="btn btn-sm btn-outline-danger"
-                                title="{{ $frame->is_default ? 'Default frames cannot be deleted' : (($frame->photo_strips_count ?? 0) > 0 ? 'Frame is in use' : 'Delete frame') }}"
-                                {{ $frame->is_default || ($frame->photo_strips_count ?? 0) > 0 ? 'disabled' : '' }}>
-                            <i class="bi bi-{{ $frame->is_default ? 'lock-fill' : 'trash' }}"></i>
+                                title="{{ $frame->is_default ? 'Default frames cannot be deleted' : 'Frame is in use and cannot be deleted' }}"
+                                disabled>
+                            <i class="bi bi-lock-fill"></i>
                         </button>
-                    </form>
+                    @endif
                 </div>
                 
                 {{-- Usage Warning --}}
@@ -161,6 +169,18 @@
     {{ $frames->links() }}
 </div>
 @endif
+
+{{-- Info Box --}}
+<div class="alert alert-info mt-4">
+    <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i> Catatan Penting</h6>
+    <hr>
+    <ul class="mb-0 small">
+        <li>Frame <strong>Default</strong> tidak dapat dihapus (protected system frame)</li>
+        <li>Frame <strong>Custom</strong> yang sudah digunakan tidak dapat dihapus</li>
+        <li>Frame <strong>Custom</strong> yang belum digunakan dapat dihapus dengan aman</li>
+        <li>Icon <i class="bi bi-lock-fill"></i> menunjukkan frame tidak dapat dihapus</li>
+    </ul>
+</div>
 @endsection
 
 @push('styles')
@@ -249,18 +269,8 @@
 
 @push('scripts')
 <script>
-function confirmDelete(frameName, isDefault, usageCount) {
-    if (isDefault) {
-        alert('🔒 Cannot delete "' + frameName + '"\n\nThis is a default frame and is protected from deletion.\n\nDefault frames can only be toggled active/inactive.');
-        return false;
-    }
-    
-    if (usageCount > 0) {
-        alert('❌ Cannot delete "' + frameName + '"\n\nThis frame is being used in ' + usageCount + ' photo strips.\n\nYou must delete those photo strips first.');
-        return false;
-    }
-    
-    return confirm('⚠️ Delete Frame: "' + frameName + '"?\n\nThis action cannot be undone!\n\nClick OK to proceed.');
+function confirmDelete(frameName) {
+    return confirm('Hapus Frame: "' + frameName + '"?\n\nTindakan ini tidak dapat dibatalkan!\n\nKlik OK untuk melanjutkan.');
 }
 </script>
 @endpush

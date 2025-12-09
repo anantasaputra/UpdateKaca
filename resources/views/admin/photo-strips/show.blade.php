@@ -13,6 +13,28 @@
     </a>
 </div>
 
+{{-- Success/Error Messages --}}
+@if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+
+@if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>{{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+
+@if(session('info'))
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle me-2"></i>{{ session('info') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
+
 <div class="row g-4">
     <!-- Photo Strip Image -->
     <div class="col-lg-8">
@@ -31,7 +53,8 @@
                          style="height: 600px;">
                         <div class="text-center">
                             <i class="bi bi-image text-muted" style="font-size: 5rem;"></i>
-                            <p class="text-muted mt-3">Image not found</p>
+                            <p class="text-muted mt-3 mb-1">Image not found</p>
+                            <small class="text-danger">{{ $photoStrip->final_image_path ?? 'No path stored' }}</small>
                         </div>
                     </div>
                 @endif
@@ -44,12 +67,17 @@
                             <i class="bi bi-download"></i> Download
                         </a>
                     @endif
-                    <form action="{{ route('admin.photo-strips.destroy', $photoStrip) }}" 
+                    
+                    {{-- FIXED: Delete Button dengan ID yang benar dan konfirmasi yang lebih baik --}}
+                    <form id="deletePhotoStripForm" 
+                          action="{{ route('admin.photo-strips.destroy', $photoStrip->id) }}" 
                           method="POST" 
-                          onsubmit="return confirm('Are you sure you want to delete this photo strip?')">
+                          class="d-inline">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn btn-danger">
+                        <button type="button" 
+                                onclick="confirmDeletePhotoStrip()" 
+                                class="btn btn-danger">
                             <i class="bi bi-trash"></i> Delete
                         </button>
                     </form>
@@ -81,9 +109,20 @@
                         <i class="bi bi-eye"></i> View Profile
                     </a>
                 @else
-                    <p class="text-muted mb-0">
-                        <i class="bi bi-person-x"></i> Guest User (Not logged in)
-                    </p>
+                    <div class="alert alert-warning mb-0">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-person-x me-2"></i>
+                            <strong>Guest User</strong>
+                        </div>
+                        <p class="mb-0 small">Pengguna tidak login saat membuat photo strip ini.</p>
+                        @if($photoStrip->guest_session_id)
+                            <hr class="my-2">
+                            <small class="text-muted">
+                                <i class="bi bi-fingerprint me-1"></i>
+                                Session: <code>{{ substr($photoStrip->guest_session_id, 0, 20) }}...</code>
+                            </small>
+                        @endif
+                    </div>
                 @endif
             </div>
         </div>
@@ -94,9 +133,9 @@
                 <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i> Details</h5>
             </div>
             <div class="card-body">
-                <table class="table table-sm table-borderless">
+                <table class="table table-sm table-borderless mb-0">
                     <tr>
-                        <td class="text-muted">ID:</td>
+                        <td class="text-muted" width="40%">ID:</td>
                         <td><strong>#{{ $photoStrip->id }}</strong></td>
                     </tr>
                     <tr>
@@ -121,7 +160,15 @@
                         <td class="text-muted">Frame:</td>
                         <td>
                             @if($photoStrip->frame)
-                                {{ $photoStrip->frame->name }}
+                                <div class="d-flex align-items-center">
+                                    @if($photoStrip->frame->image_path && Storage::disk('public')->exists($photoStrip->frame->image_path))
+                                        <img src="{{ Storage::url($photoStrip->frame->image_path) }}" 
+                                             alt="{{ $photoStrip->frame->name }}"
+                                             class="me-2 rounded"
+                                             style="width: 30px; height: 30px; object-fit: cover;">
+                                    @endif
+                                    <span>{{ $photoStrip->frame->name }}</span>
+                                </div>
                             @else
                                 <span class="text-muted">None</span>
                             @endif
@@ -129,17 +176,48 @@
                     </tr>
                     <tr>
                         <td class="text-muted">IP Address:</td>
-                        <td><code>{{ $photoStrip->ip_address }}</code></td>
+                        <td><code class="small">{{ $photoStrip->ip_address ?? 'N/A' }}</code></td>
                     </tr>
                     <tr>
                         <td class="text-muted">Created:</td>
-                        <td>{{ $photoStrip->created_at->format('M d, Y H:i') }}</td>
+                        <td>
+                            <div>{{ $photoStrip->created_at->format('d M Y, H:i') }}</div>
+                            <small class="text-muted">({{ $photoStrip->created_at->diffForHumans() }})</small>
+                        </td>
                     </tr>
                     <tr>
                         <td class="text-muted">Updated:</td>
-                        <td>{{ $photoStrip->updated_at->format('M d, Y H:i') }}</td>
+                        <td>
+                            <div>{{ $photoStrip->updated_at->format('d M Y, H:i') }}</div>
+                            <small class="text-muted">({{ $photoStrip->updated_at->diffForHumans() }})</small>
+                        </td>
                     </tr>
                 </table>
+            </div>
+        </div>
+
+        <!-- File Info (Technical Details) -->
+        <div class="card mt-3">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-file-earmark-code me-2"></i> File Information</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <small class="text-muted d-block mb-1">File Path:</small>
+                    <code class="small d-block text-break">{{ $photoStrip->final_image_path ?? 'N/A' }}</code>
+                </div>
+                <div>
+                    <small class="text-muted d-block mb-1">File Status:</small>
+                    @if($photoStrip->final_image_path && Storage::disk('public')->exists($photoStrip->final_image_path))
+                        <span class="badge bg-success">
+                            <i class="bi bi-check-circle"></i> File exists
+                        </span>
+                    @else
+                        <span class="badge bg-danger">
+                            <i class="bi bi-x-circle"></i> File not found
+                        </span>
+                    @endif
+                </div>
             </div>
         </div>
     </div>
@@ -159,6 +237,50 @@
     justify-content: center;
     font-weight: bold;
     font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.card {
+    transition: box-shadow 0.2s;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 </style>
+@endpush
+
+@push('scripts')
+<script>
+function confirmDeletePhotoStrip() {
+    // Menggunakan confirm dialog native browser yang lebih reliable
+    const confirmed = confirm(
+        'KONFIRMASI HAPUS\n\n' +
+        'Apakah Anda yakin ingin menghapus photo strip ini?\n\n' +
+        'Tindakan ini akan:\n' +
+        '• Menghapus file gambar dari server\n' +
+        '• Menghapus record dari database\n' +
+        '• TIDAK DAPAT dibatalkan!\n\n' +
+        'Klik OK untuk melanjutkan atau Cancel untuk membatalkan.'
+    );
+    
+    if (confirmed) {
+        console.log('Delete confirmed, submitting form...');
+        document.getElementById('deletePhotoStripForm').submit();
+    } else {
+        console.log('Delete cancelled by user');
+    }
+}
+
+// Auto-dismiss alerts after 5 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    const alerts = document.querySelectorAll('.alert-dismissible');
+    alerts.forEach(function(alert) {
+        setTimeout(function() {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }, 5000);
+    });
+});
+</script>
 @endpush

@@ -56,10 +56,10 @@ return new class extends Migration
         if (empty($indexes)) {
             DB::statement("ALTER TABLE {$table} ADD INDEX {$indexName} ({$column})");
             // ✅ HAPUS $this->command, gunakan echo atau skip
-            echo "✅ Index {$indexName} created\n";
+            echo "Index {$indexName} created\n";
         } else {
             // ✅ HAPUS $this->command
-            echo "⚠️  Index {$indexName} already exists, skipping...\n";
+            echo "Index {$indexName} already exists, skipping...\n";
         }
     }
 
@@ -74,7 +74,7 @@ return new class extends Migration
         
         if (!empty($indexes)) {
             DB::statement("ALTER TABLE {$table} DROP INDEX {$indexName}");
-            echo "✅ Index {$indexName} dropped\n";
+            echo "Index {$indexName} dropped\n";
         }
     }
 };

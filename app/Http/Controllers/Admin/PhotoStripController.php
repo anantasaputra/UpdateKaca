@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\PhotoStrip;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class PhotoStripController extends Controller
 {
@@ -109,37 +111,139 @@ class PhotoStripController extends Controller
     }
 
     /**
-     * Display the specified photo strip
+     * ✅ FIXED: Display the specified photo strip
+     * Menggunakan parameter ID biasa dengan manual find
      */
-    public function show(PhotoStrip $photoStrip)
+    public function show($id)
     {
-        $photoStrip->load(['user', 'frame']);
+        // Find photo strip by ID with relationships
+        $photoStrip = PhotoStrip::with(['user', 'frame'])->find($id);
+
+        // Check if photo strip exists
+        if (!$photoStrip) {
+            Log::warning('Photo strip not found', [
+                'id' => $id,
+                'url' => request()->url(),
+            ]);
+
+            return redirect()->route('admin.photo-strips.index')
+                ->with('error', 'Photo strip tidak ditemukan.');
+        }
 
         return view('admin.photo-strips.show', compact('photoStrip'));
     }
 
     /**
-     * Remove the specified photo strip
+     * ✅ FIXED: Remove the specified photo strip
+     * Menggunakan parameter ID biasa untuk menghindari konflik route model binding
      */
-    public function destroy(PhotoStrip $photoStrip)
+    public function destroy($id)
     {
-        $photoStrip->delete(); // File akan otomatis terhapus via model boot
+        try {
+            // Find photo strip by ID
+            $photoStrip = PhotoStrip::find($id);
 
-        return redirect()->back()
-            ->with('success', 'Photo strip berhasil dihapus.');
+            if (!$photoStrip) {
+                Log::warning('Photo strip not found for deletion', [
+                    'id' => $id,
+                    'url' => request()->url(),
+                ]);
+                
+                return redirect()->route('admin.photo-strips.index')
+                    ->with('error', 'Photo strip tidak ditemukan.');
+            }
+
+            Log::info('Attempting to delete photo strip', [
+                'id' => $photoStrip->id,
+                'user_id' => $photoStrip->user_id,
+                'user' => $photoStrip->user ? $photoStrip->user->name : 'Guest',
+                'image_path' => $photoStrip->final_image_path,
+                'ip_address' => $photoStrip->ip_address,
+            ]);
+
+            // Store info before deletion
+            $stripId = $photoStrip->id;
+            $imagePath = $photoStrip->final_image_path;
+
+            // Delete image file if exists
+            if ($imagePath && Storage::disk('public')->exists($imagePath)) {
+                $deleted = Storage::disk('public')->delete($imagePath);
+                
+                if ($deleted) {
+                    Log::info('Image file deleted successfully', [
+                        'path' => $imagePath,
+                    ]);
+                } else {
+                    Log::warning('Failed to delete image file', [
+                        'path' => $imagePath,
+                    ]);
+                }
+            } else {
+                Log::info('No image file to delete or file not found', [
+                    'path' => $imagePath,
+                ]);
+            }
+
+            // Delete database record
+            $photoStrip->delete();
+
+            Log::info('Photo strip deleted successfully', [
+                'id' => $stripId,
+            ]);
+
+            return redirect()->route('admin.photo-strips.index')
+                ->with('success', "Photo strip #{$stripId} berhasil dihapus!");
+
+        } catch (\Exception $e) {
+            Log::error('Error deleting photo strip', [
+                'id' => $id,
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return redirect()->route('admin.photo-strips.index')
+                ->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
+        }
     }
 
     /**
-     * ✅ NEW: Bulk delete unsaved guest strips (cleanup)
+     * NEW: Bulk delete unsaved guest strips (cleanup)
      */
     public function cleanupGuests()
     {
-        $deleted = PhotoStrip::whereNull('user_id')
-            ->where('is_saved', false)
-            ->where('created_at', '<', now()->subDays(7)) // Older than 7 days
-            ->delete();
+        try {
+            Log::info('Starting guest strips cleanup', [
+                'admin_user' => auth()->user()->email,
+            ]);
 
-        return redirect()->back()
-            ->with('success', "Berhasil menghapus {$deleted} strip guest yang lama.");
+            $deleted = PhotoStrip::whereNull('user_id')
+                ->where('is_saved', false)
+                ->where('created_at', '<', now()->subDays(7)) // Older than 7 days
+                ->delete();
+
+            Log::info('Guest strips cleanup completed', [
+                'deleted_count' => $deleted,
+                'admin_user' => auth()->user()->email,
+            ]);
+
+            if ($deleted > 0) {
+                return redirect()->back()
+                    ->with('success', "Berhasil menghapus {$deleted} strip guest yang lama.");
+            } else {
+                return redirect()->back()
+                    ->with('info', 'Tidak ada strip guest yang perlu dibersihkan.');
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error cleaning up guest strips', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'Terjadi kesalahan saat membersihkan data: ' . $e->getMessage());
+        }
     }
 }

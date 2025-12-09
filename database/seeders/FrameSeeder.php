@@ -146,7 +146,7 @@ class FrameSeeder extends Seeder
             ],
         ];
 
-        $this->command->info('🌱 Seeding frames...');
+        $this->command->info('Seeding frames...');
 
         // ✅ Insert frames ke database
         foreach ($frames as $frameData) {
@@ -154,20 +154,20 @@ class FrameSeeder extends Seeder
             $existing = Frame::where('image_path', $frameData['image_path'])->first();
             
             if ($existing) {
-                $this->command->warn("⚠️  Frame already exists: {$frameData['name']}");
+                $this->command->warn(" Frame already exists: {$frameData['name']}");
                 continue;
             }
 
             Frame::create($frameData);
-            $this->command->info("✅ Created: {$frameData['name']}");
+            $this->command->info("Created: {$frameData['name']}");
         }
 
         // ✅ Verify frame files exist
         $this->verifyFrameFiles($frames);
 
         $this->command->info('');
-        $this->command->info('✅ Frames seeded successfully!');
-        $this->command->warn('⚠️  Make sure frame PNG files exist in storage/app/public/frames/');
+        $this->command->info('Frames seeded successfully!');
+        $this->command->warn(' Make sure frame PNG files exist in storage/app/public/frames/');
     }
 
     /**
@@ -184,14 +184,14 @@ class FrameSeeder extends Seeder
         foreach ($directories as $dir) {
             if (!File::exists($dir)) {
                 File::makeDirectory($dir, 0755, true);
-                $this->command->info("📁 Created directory: {$dir}");
+                $this->command->info("Created directory: {$dir}");
             }
         }
 
         // ✅ Create symlink if not exists
         $symlinkTarget = public_path('storage');
         if (!File::exists($symlinkTarget)) {
-            $this->command->warn('⚠️  Storage symlink not found. Run: php artisan storage:link');
+            $this->command->warn('Storage symlink not found. Run: php artisan storage:link');
         }
     }
 
@@ -201,7 +201,7 @@ class FrameSeeder extends Seeder
     private function verifyFrameFiles(array $frames)
     {
         $this->command->info('');
-        $this->command->info('🔍 Verifying frame files...');
+        $this->command->info('Verifying frame files...');
 
         $storagePath = storage_path('app/public/frames');
         $missingFiles = [];
@@ -213,22 +213,22 @@ class FrameSeeder extends Seeder
             if (File::exists($filePath)) {
                 $size = File::size($filePath);
                 $sizeKB = round($size / 1024, 2);
-                $this->command->info("✅ {$filename} ({$sizeKB} KB)");
+                $this->command->info("{$filename} ({$sizeKB} KB)");
             } else {
-                $this->command->error("❌ Missing: {$filename}");
+                $this->command->error("Missing: {$filename}");
                 $missingFiles[] = $filename;
             }
         }
 
         if (!empty($missingFiles)) {
             $this->command->error('');
-            $this->command->error('❌ Missing frame files:');
+            $this->command->error('Missing frame files:');
             foreach ($missingFiles as $file) {
                 $this->command->error("   - {$file}");
             }
             $this->command->error('');
-            $this->command->warn('📥 Please upload these files to: storage/app/public/frames/');
-            $this->command->warn('📥 Or run: php artisan frames:create-placeholders');
+            $this->command->warn('Please upload these files to: storage/app/public/frames/');
+            $this->command->warn('Or run: php artisan frames:create-placeholders');
         }
     }
 

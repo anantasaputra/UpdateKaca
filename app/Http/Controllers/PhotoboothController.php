@@ -292,7 +292,7 @@ class PhotoboothController extends Controller
                 'is_saved' => false, // Default false
             ]);
 
-            Log::info('✅ Photo strip created successfully (SINGLE RECORD)', [
+            Log::info('Photo strip created successfully (SINGLE RECORD)', [
                 'strip_id' => $photoStrip->id,
                 'frame_id' => $frameId,
                 'photo_count' => $photoCount,
@@ -310,7 +310,7 @@ class PhotoboothController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('❌ Error composing strip', [
+            Log::error('Error composing strip', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -388,7 +388,7 @@ class PhotoboothController extends Controller
                 'photo_count' => $request->input('photo_count'),
             ]);
 
-            Log::info('✅ Photo strip updated', [
+            Log::info('Photo strip updated', [
                 'strip_id' => $strip->id,
                 'new_frame_id' => $request->input('frame_id'),
             ]);
@@ -405,7 +405,7 @@ class PhotoboothController extends Controller
                 'message' => 'Photo strip tidak ditemukan.'
             ], 404);
         } catch (\Exception $e) {
-            Log::error('❌ Error updating strip', [
+            Log::error('Error updating strip', [
                 'error' => $e->getMessage(),
             ]);
             return response()->json([
@@ -445,7 +445,7 @@ class PhotoboothController extends Controller
                 'is_saved' => true,
             ]);
 
-            Log::info('✅ Photo strip saved to user profile', [
+            Log::info('Photo strip saved to user profile', [
                 'strip_id' => $id,
                 'user_id' => auth()->id(),
                 'is_saved' => true,
@@ -462,7 +462,7 @@ class PhotoboothController extends Controller
                 'message' => 'Photo strip tidak ditemukan.'
             ], 404);
         } catch (\Exception $e) {
-            Log::error('❌ Error saving strip', [
+            Log::error('Error saving strip', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

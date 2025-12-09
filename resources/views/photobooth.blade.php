@@ -110,7 +110,7 @@
             <!-- Right: Frame Selection & Actions with Character -->
             <div class="review-right">
                 <div class="review-right-content">
-                    <!-- ✅ FIXED: DYNAMIC FRAME PICKER WITH PROPER PATHS -->
+                    <!-- FIXED: DYNAMIC FRAME PICKER WITH PROPER PATHS -->
                     <div class="frame-picker">
                         <h3>Pick Your Photo Frame</h3>
                         
@@ -125,7 +125,7 @@
                                     <div class="frames-grid">
                                         @foreach($frames as $frame)
                                         @php
-                                            // ✅ CRITICAL FIX: Generate proper frame URL with fallbacks
+                                            // CRITICAL FIX: Generate proper frame URL with fallbacks
                                             $frameBasename = basename($frame->image_path);
                                             $frameUrl = null;
                                             $frameDataPath = null;
@@ -159,10 +159,10 @@
                                                     <img src="{{ $frameUrl }}" 
                                                          alt="{{ $frame->name }}"
                                                          loading="lazy"
-                                                         onerror="console.error('❌ Frame load failed:', '{{ $frame->name }}', this.src); this.parentElement.innerHTML='<div class=\'frame-placeholder-thumb\' style=\'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;\'><span style=\'font-size:2rem;\'>❌</span><small style=\'font-size:0.7rem;color:#999;\'>{{ $frame->name }}</small><small style=\'font-size:0.6rem;color:#dc3545;\'>{{ $frameBasename }}</small></div>'">
+                                                         onerror="console.error('Frame load failed:', '{{ $frame->name }}', this.src); this.parentElement.innerHTML='<div class=\'frame-placeholder-thumb\' style=\'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;\'><span style=\'font-size:2rem;\'>❌</span><small style=\'font-size:0.7rem;color:#999;\'>{{ $frame->name }}</small><small style=\'font-size:0.6rem;color:#dc3545;\'>{{ $frameBasename }}</small></div>'">
                                                 @else
                                                     <div class="frame-placeholder-thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;">
-                                                        <span style="font-size:2rem;">🖼️</span>
+                                                        <span style="font-size:2rem;"></span>
                                                         <small style="font-size:0.7rem;color:#999;">{{ $frame->name }}</small>
                                                         <small style="font-size:0.6rem;color:#dc3545;">{{ $frameBasename }}</small>
                                                     </div>
@@ -1160,7 +1160,7 @@
 
 @push('scripts')
 <script>
-console.log('🚀 Initializing PhotoBooth Application...');
+console.log('Initializing PhotoBooth Application...');
 
 // ✅ CRITICAL: Inject frame data untuk JavaScript
 window.availableFrames = @json($framesJson ?? []);
@@ -1172,7 +1172,7 @@ window.csrfToken = '{{ csrf_token() }}';
 window.isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
 
 // Debug log
-console.log('📦 Backend data loaded:', {
+console.log('Backend data loaded:', {
     framesCount: window.availableFrames.length,
     hasFrames: window.hasFramesInDB,
     isAuth: window.isAuthenticated,
@@ -1203,12 +1203,12 @@ let currentStripId = null;
 
 // ✅ DOM ready handler
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('✅ DOM loaded');
+    console.log('DOM loaded');
     
     const saveBtn = document.getElementById('saveBtn');
     if (saveBtn) {
         saveBtn.addEventListener('click', saveStripToProfile);
-        console.log('✅ Save button listener attached');
+        console.log('Save button listener attached');
     }
 });
 
@@ -1216,7 +1216,7 @@ document.addEventListener('DOMContentLoaded', function() {
  * Save strip to user profile
  */
 function saveStripToProfile() {
-    console.log('💾 Saving strip:', currentStripId);
+    console.log('Saving strip:', currentStripId);
     
     if (!currentStripId) {
         alert('Strip ID tidak ditemukan!');
@@ -1239,16 +1239,16 @@ function saveStripToProfile() {
     .then(response => response.json())
     .then(result => {
         if (result.success) {
-            alert('✅ ' + result.message);
+            alert(result.message);
             window.location.href = '/profile';
         } else {
-            alert('❌ ' + result.message);
+            alert(result.message);
             saveBtn.disabled = false;
             saveBtn.innerHTML = originalText;
         }
     })
     .catch(error => {
-        console.error('❌ Save error:', error);
+        console.error('Save error:', error);
         alert('Terjadi kesalahan saat menyimpan.');
         saveBtn.disabled = false;
         saveBtn.innerHTML = originalText;
@@ -1259,15 +1259,15 @@ function saveStripToProfile() {
  * Show save button (called from JavaScript app)
  */
 function showSaveButton(stripId) {
-    console.log('👁️ Showing save button for strip:', stripId);
+    console.log('Showing save button for strip:', stripId);
     currentStripId = stripId;
     
     const saveBtn = document.getElementById('saveBtn');
     if (saveBtn && window.isAuthenticated) {
         saveBtn.style.display = 'block';
-        console.log('✅ Save button visible');
+        console.log('Save button visible');
     } else {
-        console.log('⚠️ Save button not shown:', {
+        console.log('Save button not shown:', {
             hasButton: !!saveBtn,
             isAuth: window.isAuthenticated
         });
@@ -1295,6 +1295,6 @@ function closeLoginModal() {
 }
 </script>
 
-{{-- ✅ Load main PhotoBooth app --}}
+{{-- Load main PhotoBooth app --}}
 <script src="{{ asset('js/photobooth-complete.js') }}"></script>
 @endpush

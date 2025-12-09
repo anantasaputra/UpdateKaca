@@ -1,4 +1,6 @@
-// PhotoBooth Application
+// PhotoBooth Application with Custom PNG Frames + Dynamic DB Frames
+// ✅ UPDATED: Fixed frame loading issues + improved error handling
+
 class PhotoBoothApp {
     constructor() {
         this.video = document.getElementById('cameraVideo');
@@ -9,13 +11,123 @@ class PhotoBoothApp {
         this.currentCamera = null;
         this.timerDuration = 3;
         this.isCapturing = false;
+        
+        // NEW: Dynamic frame system from database
+        this.useDynamicFrames = window.hasFramesInDB || false;
+        this.selectedFrameId = null;
+        this.selectedFramePath = null;
+        
+        // ✅ NEW: Backend frames data
+        this.backendFrames = {};
+        
+        // OLD: Fallback color system
         this.selectedColor = 'brown';
         this.frameType = 'frame4';
+        
+        // ✅ Strip management
         this.currentStripId = null;
         this.currentStripUrl = null;
         this.retakingIndex = null;
+        this.isStripSaved = false;
+
+        // Frame configurations
+        this.frameConfigs = this.getFrameConfigs();
+
+        console.log('PhotoBoothApp initialized:', {
+            useDynamicFrames: this.useDynamicFrames,
+            framesByCount: window.framesByCount,
+            availableFrames: window.availableFrames
+        });
+
+        // ✅ Load frames from backend
+        this.loadFramesFromBackend();
 
         this.init();
+    }
+
+    /**
+     * ✅ NEW: Load frames from backend
+     */
+    loadFramesFromBackend() {
+        if (window.availableFrames && window.availableFrames.length > 0) {
+            console.log('Loading frames from backend:', window.availableFrames);
+            
+            // Store frames grouped by photo count
+            window.availableFrames.forEach(frame => {
+                if (!this.backendFrames[frame.photo_count]) {
+                    this.backendFrames[frame.photo_count] = [];
+                }
+                this.backendFrames[frame.photo_count].push(frame);
+            });
+            
+            console.log('Frames grouped by count:', this.backendFrames);
+        } else {
+            console.warn('No frames loaded from backend, using fallback');
+            this.backendFrames = {};
+        }
+    }
+
+    /**
+     * ✅ NEW: Get frame path with priority system
+     */
+    getFramePath() {
+        // Priority 1: Use selected dynamic frame
+        if (this.useDynamicFrames && this.selectedFramePath) {
+            console.log('Using dynamic frame:', this.selectedFramePath);
+            return this.selectedFramePath;
+        }
+
+        // Priority 2: Use backend frame
+        if (this.backendFrames && this.backendFrames[this.currentPhotoCount]) {
+            const frames = this.backendFrames[this.currentPhotoCount];
+            
+            // Find frame matching color
+            const matchingFrame = frames.find(f => f.color_code === this.selectedColor);
+            
+            if (matchingFrame) {
+                console.log('Using backend frame:', matchingFrame.image_path);
+                return matchingFrame.image_path;
+            }
+            
+            // Fallback: use first frame
+            console.log('Using first backend frame:', frames[0].image_path);
+            return frames[0].image_path;
+        }
+
+        // Priority 3: Fallback to old system
+        const fallbackPath = `/storage/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
+        console.warn('Using fallback frame:', fallbackPath);
+        return fallbackPath;
+    }
+
+    // Frame configurations
+    getFrameConfigs() {
+        return {
+            2: {
+                frameSize: { width: 1200, height: 1800 },
+                photoAreas: [
+                    { x: 70, y: 60, width: 1050, height: 735 },
+                    { x: 70, y: 805, width: 1050, height: 735 }
+                ]
+            },
+            3: {
+                frameSize: { width: 1200, height: 1800 },
+                photoAreas: [
+                    { x: 70, y: 60, width: 520, height: 765 },
+                    { x: 610, y: 60, width: 520, height: 765 },
+                    { x: 70, y: 805, width: 1050, height: 735 }
+                ]
+            },
+            4: {
+                frameSize: { width: 1200, height: 1800 },
+                photoAreas: [
+                    { x: 70, y: 60, width: 520, height: 765 },
+                    { x: 610, y: 60, width: 520, height: 765 },
+                    { x: 70, y: 805, width: 520, height: 765 },
+                    { x: 610, y: 805, width: 520, height: 765 }
+                ]
+            }
+        };
     }
 
     init() {
@@ -69,25 +181,49 @@ class PhotoBoothApp {
     }
 
     setupEventListeners() {
+        // Camera selection
         document.getElementById('cameraSelect').addEventListener('change', (e) => {
             this.currentCamera = e.target.value;
             this.startCamera();
         });
 
+        // Photo count selection
         document.getElementById('photoCountSelect').addEventListener('change', (e) => {
             this.currentPhotoCount = parseInt(e.target.value);
             this.frameType = `frame${this.currentPhotoCount}`;
+            
+            this.resetStrip();
+            
+            if (this.useDynamicFrames) {
+                document.querySelectorAll('.frame-group').forEach(group => {
+                    const groupCount = parseInt(group.dataset.photoCount);
+                    group.style.display = groupCount === this.currentPhotoCount ? 'block' : 'none';
+                });
+                
+                this.selectedFrameId = null;
+                this.selectedFramePath = null;
+                document.querySelectorAll('.frame-option').forEach(opt => opt.classList.remove('active'));
+                
+                const firstFrame = document.querySelector(`.frame-group[data-photo-count="${this.currentPhotoCount}"] .frame-option`);
+                if (firstFrame) {
+                    firstFrame.click();
+                }
+            }
+            
             this.updateProgress();
         });
 
+        // Timer selection
         document.getElementById('timerSelect').addEventListener('change', (e) => {
             this.timerDuration = parseInt(e.target.value);
         });
 
+        // Start photo button
         document.getElementById('startPhotoBtn').addEventListener('click', () => {
             this.startPhotoSession();
         });
 
+        // Review modal buttons
         document.getElementById('backBtn').addEventListener('click', () => {
             this.closeReviewModal();
         });
@@ -107,6 +243,140 @@ class PhotoBoothApp {
             });
         }
 
+        if (this.useDynamicFrames) {
+            this.setupDynamicFrameSelection();
+        } else {
+            this.setupColorSelection();
+        }
+    }
+
+    /**
+     * ✅ Reset strip state
+     */
+    resetStrip() {
+        this.photos = [];
+        this.currentStripId = null;
+        this.currentStripUrl = null;
+        this.isStripSaved = false;
+        this.retakingIndex = null;
+        this.updateThumbnails();
+        this.updateProgress();
+        
+        const saveBtn = document.getElementById('saveBtn');
+        if (saveBtn) {
+            saveBtn.style.display = 'none';
+        }
+        
+        console.log('Strip state reset');
+    }
+
+    /**
+     * ✅ UPDATED: Setup dynamic frame selection
+     */
+    setupDynamicFrameSelection() {
+        console.log('Setting up dynamic frame selection...');
+        const frameOptions = document.querySelectorAll('.frame-option');
+        
+        console.log(`Found ${frameOptions.length} frame options`);
+        
+        frameOptions.forEach((option, index) => {
+            option.addEventListener('click', async () => {
+                console.log(`\nFrame ${index + 1} clicked`);
+                
+                document.querySelectorAll('.frame-option').forEach(opt => opt.classList.remove('active'));
+                option.classList.add('active');
+                
+                this.selectedFrameId = option.dataset.frameId;
+                this.selectedFramePath = option.dataset.framePath;
+                this.selectedColor = option.dataset.color || 'brown';
+                
+                console.log('Frame selected:', {
+                    id: this.selectedFrameId,
+                    path: this.selectedFramePath,
+                    color: this.selectedColor,
+                    photoCount: option.dataset.photoCount
+                });
+                
+                // ✅ Test frame loading
+                await this.testFrameLoad(this.selectedFramePath);
+                
+                // Update preview if photos exist
+                if (this.photos.length > 0) {
+                    console.log('Updating preview with new frame...');
+                    await this.updateStripPreview();
+                    
+                    if (this.currentStripId && this.photos.length === this.currentPhotoCount) {
+                        console.log('Re-composing strip with new frame...');
+                        await this.composeAndUpdateStrip();
+                    }
+                }
+            });
+        });
+        
+        const firstFrame = document.querySelector('.frame-option');
+        if (firstFrame) {
+            console.log('Auto-selecting first frame...');
+            firstFrame.click();
+        } else {
+            console.warn('No frame options found!');
+        }
+    }
+
+    /**
+     * ✅ NEW: Test frame loading
+     */
+    async testFrameLoad(framePath) {
+        try {
+            console.log(`Testing frame load: ${framePath}`);
+            
+            const testImg = new Image();
+            testImg.crossOrigin = 'anonymous';
+            
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    console.error('Frame load timeout');
+                    reject(new Error('Timeout'));
+                }, 5000);
+                
+                testImg.onload = () => {
+                    clearTimeout(timeout);
+                    console.log('Frame loaded successfully!');
+                    resolve(true);
+                };
+                
+                testImg.onerror = (error) => {
+                    clearTimeout(timeout);
+                    console.error('Frame load failed!');
+                    console.error('Path:', framePath);
+                    
+                    this.showFrameError(framePath, error);
+                    reject(error);
+                };
+                
+                testImg.src = framePath;
+            });
+        } catch (error) {
+            console.error('Frame test error:', error);
+        }
+    }
+
+    /**
+     * ✅ NEW: Show user-friendly frame error
+     */
+    showFrameError(framePath, error) {
+        const errorMsg = `Frame tidak dapat dimuat!\n\n` +
+                        `Path: ${framePath}\n\n` +
+                        `Kemungkinan penyebab:\n` +
+                        `1. File tidak ada di storage/app/public/frames/\n` +
+                        `2. Symlink belum dibuat (php artisan storage:link)\n` +
+                        `3. Nama file salah (case-sensitive)\n` +
+                        `4. File permission tidak OK\n\n` +
+                        `Cek browser console (F12) untuk detail.`;
+        
+        alert(errorMsg);
+    }
+
+    setupColorSelection() {
         const colorButtons = document.querySelectorAll('.color-btn');
         colorButtons.forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -116,8 +386,8 @@ class PhotoBoothApp {
                 
                 await this.updateStripPreview();
                 
-                if (this.photos.length > 0) {
-                    await this.composeAndSaveStrip();
+                if (this.photos.length > 0 && this.currentStripId) {
+                    await this.composeAndUpdateStrip();
                 }
             });
         });
@@ -127,9 +397,7 @@ class PhotoBoothApp {
         if (this.isCapturing) return;
 
         if (this.retakingIndex === null) {
-            this.photos = [];
-            this.currentStripId = null;
-            this.currentStripUrl = null;
+            this.resetStrip();
         }
 
         this.isCapturing = true;
@@ -139,6 +407,7 @@ class PhotoBoothApp {
         const btn = document.getElementById('startPhotoBtn');
         btn.disabled = true;
 
+        // Handle retake
         if (this.retakingIndex !== null) {
             await this.capturePhoto(this.retakingIndex + 1);
             
@@ -149,13 +418,15 @@ class PhotoBoothApp {
             this.updateProgress();
             this.closeRetakeModal();
             this.showReviewModal();
-            await this.composeAndSaveStrip();
+            
+            await this.composeAndUpdateStrip();
             
             this.retakingIndex = null;
             btn.querySelector('.btn-text').textContent = 'Mulai Foto';
             return;
         }
 
+        // Capture all photos
         for (let i = 0; i < this.currentPhotoCount; i++) {
             await this.capturePhoto(i + 1);
             await this.wait(1000);
@@ -165,6 +436,8 @@ class PhotoBoothApp {
         btn.disabled = false;
         
         this.showReviewModal();
+        
+        // ✅ Save strip once
         await this.composeAndSaveStrip();
     }
 
@@ -193,6 +466,8 @@ class PhotoBoothApp {
 
         this.updateThumbnails();
         this.updateProgress();
+        
+        console.log(`📷 Photo ${photoNumber} captured (${this.photos.length}/${this.currentPhotoCount})`);
     }
 
     async showCountdown() {
@@ -291,8 +566,21 @@ class PhotoBoothApp {
         }
     }
 
+    /**
+     * ✅ Compose and SAVE strip (once only)
+     */
     async composeAndSaveStrip() {
-        if (this.photos.length === 0) return;
+        if (this.isStripSaved) {
+            console.log('Strip already saved, skipping...');
+            return;
+        }
+
+        if (this.photos.length !== this.currentPhotoCount) {
+            console.log(`Photos incomplete: ${this.photos.length}/${this.currentPhotoCount}`);
+            return;
+        }
+
+        console.log('\nCreating and saving final strip...');
 
         try {
             const downloadBtn = document.getElementById('downloadBtn');
@@ -303,30 +591,17 @@ class PhotoBoothApp {
                 downloadBtn.innerHTML = 'Processing...';
             }
 
-            // PERBAIKAN: Cek apakah frame tersedia
-            if (!window.framesData || !window.framesData[this.frameType]) {
-                console.warn('Frame tidak tersedia, gunakan fallback');
-                const finalCanvas = await this.createFinalCanvasSimple();
-                const finalImageData = finalCanvas.toDataURL('image/png');
-                await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
-                return;
-            }
-
-            // Coba gunakan frame image
-            try {
-                const finalCanvas = await this.createFinalCanvasWithFrame();
-                const finalImageData = finalCanvas.toDataURL('image/png');
-                await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
-            } catch (frameError) {
-                console.error('Error loading frame, gunakan fallback:', frameError);
-                const finalCanvas = await this.createFinalCanvasSimple();
-                const finalImageData = finalCanvas.toDataURL('image/png');
-                await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
-            }
+            const finalCanvas = await this.createFinalCanvasWithCustomFrame();
+            const finalImageData = finalCanvas.toDataURL('image/png');
+            
+            await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
+            
+            this.isStripSaved = true;
+            console.log('Strip saved successfully!');
 
         } catch (error) {
             console.error('Error composing strip:', error);
-            alert('Terjadi kesalahan saat membuat photo strip: ' + error.message);
+            alert('Terjadi kesalahan: ' + error.message);
             
             const downloadBtn = document.getElementById('downloadBtn');
             if (downloadBtn) {
@@ -336,8 +611,50 @@ class PhotoBoothApp {
         }
     }
 
-    // BARU: Method untuk kirim ke server
+    /**
+     * ✅ Update existing strip (no new save)
+     */
+    async composeAndUpdateStrip() {
+        if (!this.currentStripId) {
+            console.log('No strip ID, saving new strip...');
+            await this.composeAndSaveStrip();
+            return;
+        }
+
+        console.log('\nUpdating existing strip...');
+
+        try {
+            const finalCanvas = await this.createFinalCanvasWithCustomFrame();
+            const finalImageData = finalCanvas.toDataURL('image/png');
+            
+            const response = await fetch(`/photobooth/update-strip/${this.currentStripId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': window.csrfToken
+                },
+                body: JSON.stringify({
+                    image: finalImageData,
+                    frame_id: this.useDynamicFrames ? this.selectedFrameId : null,
+                    photo_count: this.currentPhotoCount
+                })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('Strip updated successfully!');
+                this.currentStripUrl = result.strip_url;
+            }
+
+        } catch (error) {
+            console.error('Error updating strip:', error);
+        }
+    }
+
     async sendToServer(finalImageData, downloadBtn, originalDownloadText) {
+        console.log('Sending strip to server...');
+        
         const response = await fetch('/photobooth/compose', {
             method: 'POST',
             headers: {
@@ -345,8 +662,8 @@ class PhotoBoothApp {
                 'X-CSRF-TOKEN': window.csrfToken
             },
             body: JSON.stringify({
-                photos: [finalImageData],
-                frame_id: null,
+                image: finalImageData,
+                frame_id: this.useDynamicFrames ? this.selectedFrameId : null,
                 photo_count: this.currentPhotoCount
             })
         });
@@ -373,117 +690,92 @@ class PhotoBoothApp {
         }
     }
 
-    // BARU: Fallback - buat canvas tanpa frame image
-    async createFinalCanvasSimple() {
+    /**
+     * ✅ UPDATED: Create final canvas with improved frame loading
+     */
+    async createFinalCanvasWithCustomFrame() {
+        console.log('\nCreating final canvas...');
+        
         const tempCanvas = document.createElement('canvas');
         const ctx = tempCanvas.getContext('2d');
 
-        const canvasWidth = 800;
-        let canvasHeight;
+        const config = this.frameConfigs[this.currentPhotoCount];
         
-        switch(this.currentPhotoCount) {
-            case 2: canvasHeight = 1600; break;
-            case 3: canvasHeight = 2000; break;
-            case 4: canvasHeight = 2400; break;
-            default: canvasHeight = 2400;
+        if (!config) {
+            throw new Error(`Config not found for ${this.currentPhotoCount} photos`);
         }
 
-        tempCanvas.width = canvasWidth;
-        tempCanvas.height = canvasHeight;
+        tempCanvas.width = config.frameSize.width;
+        tempCanvas.height = config.frameSize.height;
 
-        // Frame color
-        let frameColor;
-        switch(this.selectedColor) {
-            case 'brown': frameColor = '#6B4423'; break;
-            case 'cream': frameColor = '#CBA991'; break;
-            case 'white': frameColor = '#F5F5F5'; break;
-            default: frameColor = '#6B4423';
-        }
-        
-        ctx.fillStyle = frameColor;
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        // White background
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
-        const padding = 60;
-        const photoGap = 30;
-        const photoWidth = canvasWidth - (padding * 2);
-        const availableHeight = canvasHeight - (padding * 2) - (photoGap * (this.currentPhotoCount - 1));
-        const photoHeight = availableHeight / this.currentPhotoCount;
-
+        // Draw photos
+        console.log(`Drawing ${this.photos.length} photos...`);
         for (let i = 0; i < this.photos.length; i++) {
-            const img = await this.loadImage(this.photos[i]);
-            
-            const xPos = padding;
-            const yPos = padding + (i * (photoHeight + photoGap));
-         
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(xPos - 10, yPos - 10, photoWidth + 20, photoHeight + 20);
-        
-    
-            ctx.drawImage(img, xPos, yPos, photoWidth, photoHeight);
+            try {
+                const photoImg = await this.loadImage(this.photos[i]);
+                const area = config.photoAreas[i];
+                
+                if (!area) {
+                    console.warn(`Photo area ${i} not found`);
+                    continue;
+                }
+                
+                this.drawImageCover(ctx, photoImg, area.x, area.y, area.width, area.height);
+                console.log(`Photo ${i + 1} drawn`);
+            } catch (error) {
+                console.error(`Failed to draw photo ${i}:`, error);
+            }
         }
 
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.lineWidth = 8;
-        ctx.strokeRect(4, 4, canvasWidth - 8, canvasHeight - 8);
+        // ✅ Get frame path
+        const framePath = this.getFramePath();
+        console.log(`Loading frame: ${framePath}`);
+        
+        try {
+            const frameImg = await this.loadImage(framePath);
+            console.log('Frame loaded');
+            
+            ctx.drawImage(frameImg, 0, 0, tempCanvas.width, tempCanvas.height);
+            console.log('Frame drawn');
+            
+        } catch (error) {
+            console.error('Frame load error:', error);
+            this.showFrameError(framePath, error);
+            throw error;
+        }
 
+        console.log('Final canvas complete!');
         return tempCanvas;
     }
 
-    // Buat canvas dengan frame image asli
-    async createFinalCanvasWithFrame() {
-        const tempCanvas = document.createElement('canvas');
-        const ctx = tempCanvas.getContext('2d');
-
-        // PERBAIKAN: Tambah error handling
-        const frameUrl = window.framesData[this.frameType][this.selectedColor];
+    drawImageCover(ctx, img, x, y, width, height) {
+        const imgRatio = img.width / img.height;
+        const canvasRatio = width / height;
         
-        if (!frameUrl) {
-            throw new Error('Frame URL tidak ditemukan');
-        }
-
-        console.log('Loading frame:', frameUrl);
-        const frameImg = await this.loadImage(frameUrl);
-
-        tempCanvas.width = frameImg.width;
-        tempCanvas.height = frameImg.height;
-
-        const photoAreas = this.getPhotoAreas(frameImg.width, frameImg.height);
-
-        for (let i = 0; i < this.photos.length; i++) {
-            const photoImg = await this.loadImage(this.photos[i]);
-            const area = photoAreas[i];
-            
-            ctx.drawImage(photoImg, area.x, area.y, area.width, area.height);
-        }
-
-        ctx.drawImage(frameImg, 0, 0, frameImg.width, frameImg.height);
-
-        return tempCanvas;
-    }
-
-    getPhotoAreas(frameWidth, frameHeight) {
-        const areas = [];
+        let drawWidth, drawHeight, offsetX, offsetY;
         
-        const borderHorizontal = frameWidth * 0.05;
-        const borderTop = frameHeight * 0.04;
-        const borderBottom = frameHeight * 0.15;
-        const gap = frameHeight * 0.02;
-        
-        const photoWidth = frameWidth - (borderHorizontal * 2);
-        const availableHeight = frameHeight - borderTop - borderBottom;
-        const totalGaps = (this.currentPhotoCount - 1) * gap;
-        const photoHeight = (availableHeight - totalGaps) / this.currentPhotoCount;
-        
-        for (let i = 0; i < this.currentPhotoCount; i++) {
-            areas.push({
-                x: borderHorizontal,
-                y: borderTop + (i * (photoHeight + gap)),
-                width: photoWidth,
-                height: photoHeight
-            });
+        if (imgRatio > canvasRatio) {
+            drawHeight = height;
+            drawWidth = img.width * (height / img.height);
+            offsetX = (drawWidth - width) / 2;
+            offsetY = 0;
+        } else {
+            drawWidth = width;
+            drawHeight = img.height * (width / img.width);
+            offsetX = 0;
+            offsetY = (drawHeight - height) / 2;
         }
         
-        return areas;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, width, height);
+        ctx.clip();
+        ctx.drawImage(img, x - offsetX, y - offsetY, drawWidth, drawHeight);
+        ctx.restore();
     }
 
     showSaveButton() {
@@ -496,7 +788,7 @@ class PhotoBoothApp {
 
     async saveStripToProfile() {
         if (!this.currentStripId) {
-            alert('Strip ID tidak ditemukan! Silakan tunggu hingga proses selesai.');
+            alert('Strip ID tidak ditemukan!');
             return;
         }
 
@@ -509,7 +801,7 @@ class PhotoBoothApp {
         const originalText = saveBtn.innerHTML;
 
         saveBtn.disabled = true;
-        saveBtn.innerHTML = '⏳ Menyimpan...';
+        saveBtn.innerHTML = 'Menyimpan...';
 
         try {
             const response = await fetch(`/photobooth/save/${this.currentStripId}`, {
@@ -523,8 +815,7 @@ class PhotoBoothApp {
             const result = await response.json();
             
             if (result.success) {
-                alert('✅ ' + result.message);
-             
+                alert(result.message);
                 window.location.href = '/profile';
             } else {
                 alert(result.message);
@@ -533,7 +824,7 @@ class PhotoBoothApp {
             }
         } catch (error) {
             console.error('Error saving strip:', error);
-            alert('❌ Terjadi kesalahan saat menyimpan.');
+            alert('Terjadi kesalahan saat menyimpan.');
             saveBtn.disabled = false;
             saveBtn.innerHTML = originalText;
         }
@@ -552,124 +843,120 @@ class PhotoBoothApp {
         const canvas = document.getElementById('stripCanvas');
         const ctx = canvas.getContext('2d');
 
-        // PERBAIKAN: Gunakan fallback jika frame tidak ada
-        if (!window.framesData || !window.framesData[this.frameType]) {
-            await this.updateStripPreviewSimple();
-            return;
-        }
-
-        try {
-            const frameUrl = window.framesData[this.frameType][this.selectedColor];
-            const frameImg = await this.loadImage(frameUrl);
-
-            const scale = 0.4;
-            canvas.width = frameImg.width * scale;
-            canvas.height = frameImg.height * scale;
-
-            const photoAreas = this.getPhotoAreas(canvas.width, canvas.height);
-
-            for (let i = 0; i < this.photos.length; i++) {
-                const photoImg = await this.loadImage(this.photos[i]);
-                const area = photoAreas[i];
-                
-                ctx.drawImage(photoImg, area.x, area.y, area.width, area.height);
-            }
-
-            ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
-        } catch (error) {
-            console.warn('Error loading frame for preview, gunakan fallback:', error);
-            await this.updateStripPreviewSimple();
-        }
-    }
-
-    // BARU: Preview tanpa frame image
-    async updateStripPreviewSimple() {
-        const canvas = document.getElementById('stripCanvas');
-        const ctx = canvas.getContext('2d');
-
-        const canvasWidth = 360;
-        let canvasHeight;
+        const config = this.frameConfigs[this.currentPhotoCount];
         
-        switch(this.currentPhotoCount) {
-            case 2: canvasHeight = 800; break;
-            case 3: canvasHeight = 1000; break;
-            case 4: canvasHeight = 1200; break;
-            default: canvasHeight = 1200;
-        }
+        if (!config) return;
 
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
+        const scale = 0.35;
+        canvas.width = config.frameSize.width * scale;
+        canvas.height = config.frameSize.height * scale;
 
-        
-        let frameColor;
-        switch(this.selectedColor) {
-            case 'brown': frameColor = '#6B4423'; break;
-            case 'cream': frameColor = '#CBA991'; break;
-            case 'white': frameColor = '#F5F5F5'; break;
-            default: frameColor = '#6B4423';
-        }
-
-
-        ctx.fillStyle = frameColor;
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-
-        const padding = 30;
-        const photoGap = 15;
-        const photoWidth = canvasWidth - (padding * 2);
-        const availableHeight = canvasHeight - (padding * 2) - (photoGap * (this.currentPhotoCount - 1));
-        const photoHeight = availableHeight / this.currentPhotoCount;
-
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         for (let i = 0; i < this.photos.length; i++) {
-            const img = await this.loadImage(this.photos[i]);
+            const photoImg = await this.loadImage(this.photos[i]);
+            const area = config.photoAreas[i];
             
-            const xPos = padding;
-            const yPos = padding + (i * (photoHeight + photoGap));
-           
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(xPos - 5, yPos - 5, photoWidth + 10, photoHeight + 10);
-        
-            ctx.drawImage(img, xPos, yPos, photoWidth, photoHeight);
+            if (!area) continue;
+            
+            const scaledArea = {
+                x: area.x * scale,
+                y: area.y * scale,
+                width: area.width * scale,
+                height: area.height * scale
+            };
+            
+            this.drawImageCover(ctx, photoImg, scaledArea.x, scaledArea.y, scaledArea.width, scaledArea.height);
         }
 
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(2, 2, canvasWidth - 4, canvasHeight - 4);
-    
+        const framePath = this.getFramePath();
+        
+        try {
+            const frameImg = await this.loadImage(framePath);
+            ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+        } catch (error) {
+            console.error('Error loading frame for preview:', error);
+        }
     }
-
 
     async downloadPhotoStrip() {
-        if (this.currentStripId) 
-            {
+        if (this.currentStripId) {
             window.location.href = `/photobooth/download/${this.currentStripId}`;
         } else {
-            alert('Photo strip belum siap. Silakan tunggu sebentar...');
+            alert('Photo strip belum siap. Silakan tunggu...');
         }
     }
 
+    /**
+     * ✅ UPDATED: Load image with better error handling
+     */
     loadImage(src) {
         return new Promise((resolve, reject) => {
+            console.log(`Loading: ${src}`);
+            
             const img = new Image();
             img.crossOrigin = 'anonymous';
             
-            // PERBAIKAN: Tambah timeout
             const timeout = setTimeout(() => {
-                reject(new Error('Image loading timeout: ' + src));
-            }, 10000); // 10 detik timeout
+                console.error(`Timeout: ${src}`);
+                reject(new Error('Timeout: ' + src));
+            }, 10000);
             
             img.onload = () => {
                 clearTimeout(timeout);
+                console.log(`Loaded: ${src}`);
                 resolve(img);
             };
             
-            img.onerror = () => {
+            img.onerror = (event) => {
                 clearTimeout(timeout);
-                reject(new Error('Failed to load image: ' + src));
+                console.error(`Failed: ${src}`);
+                console.error('Error:', event);
+                
+                // ✅ Retry without cache buster
+                if (src.includes('?v=')) {
+                    const cleanSrc = src.split('?')[0];
+                    console.log(`Retry: ${cleanSrc}`);
+                    
+                    const retryImg = new Image();
+                    retryImg.crossOrigin = 'anonymous';
+                    
+                    retryImg.onload = () => {
+                        console.log(`Retry success: ${cleanSrc}`);
+                        resolve(retryImg);
+                    };
+                    
+                    retryImg.onerror = () => {
+                        console.error(`Retry failed: ${cleanSrc}`);
+                        
+                        // Last try without CORS
+                        const finalImg = new Image();
+                        finalImg.onload = () => {
+                            console.log(`Loaded (no CORS): ${cleanSrc}`);
+                            resolve(finalImg);
+                        };
+                        finalImg.onerror = () => {
+                            console.error(`All attempts failed`);
+                            reject(new Error('Failed: ' + src));
+                        };
+                        finalImg.src = cleanSrc;
+                    };
+                    
+                    retryImg.src = cleanSrc;
+                } else {
+                    reject(new Error('Failed: ' + src));
+                }
             };
             
-            img.src = src;
+            // ✅ Handle different URL types
+            if (src.startsWith('http://') || src.startsWith('https://')) {
+                img.src = src; // Full URL from backend
+            } else if (src.includes('/storage/frames/')) {
+                img.src = src + '?v=' + Date.now();
+            } else {
+                img.src = src;
+            }
         });
     }
 
@@ -678,19 +965,20 @@ class PhotoBoothApp {
     }
 }
 
-
+// Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    new PhotoBoothApp();
+    console.log('Initializing PhotoBoothApp...');
+    window.photoboothApp = new PhotoBoothApp();
+    console.log('PhotoBoothApp initialized');
 });
 
-
+// Global helpers
 function closeLoginModal() {
     const modal = document.getElementById('loginModal');
     if (modal) {
         modal.style.display = 'none';
     }
 }
-
 
 function closeRetakeModal() {
     const modal = document.getElementById('retakeModal');

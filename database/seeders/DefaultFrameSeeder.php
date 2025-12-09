@@ -12,12 +12,12 @@ class DefaultFrameSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->command->info('🚀 Starting default frames seeding...');
+        $this->command->info('Starting default frames seeding...');
 
         // Ensure frames directory exists in storage
         if (!Storage::disk('public')->exists('frames')) {
             Storage::disk('public')->makeDirectory('frames');
-            $this->command->info('✅ Created frames directory in storage');
+            $this->command->info('Created frames directory in storage');
         }
 
         $defaultFrames = [
@@ -88,7 +88,7 @@ class DefaultFrameSeeder extends Seeder
                     $storagePath = storage_path('app/public/' . $destPath);
                     
                     File::copy($sourcePath, $storagePath);
-                    $this->command->info("  ✅ Copied image to storage");
+                    $this->command->info("  Copied image to storage");
                     
                     // Create or update frame record
                     $frame = Frame::updateOrCreate(
@@ -107,17 +107,17 @@ class DefaultFrameSeeder extends Seeder
                         ]
                     );
                     
-                    $this->command->info("  ✅ Database record created/updated (ID: {$frame->id})");
+                    $this->command->info("  Database record created/updated (ID: {$frame->id})");
                     $successCount++;
                     
                 } else {
-                    $this->command->warn("  ⚠️  Source file not found: {$sourcePath}");
-                    $this->command->warn("  💡 Please copy frame images to: public/frames/");
+                    $this->command->warn("  Source file not found: {$sourcePath}");
+                    $this->command->warn("  Please copy frame images to: public/frames/");
                     $errorCount++;
                 }
                 
             } catch (\Exception $e) {
-                $this->command->error("  ❌ Error: " . $e->getMessage());
+                $this->command->error("  Error: " . $e->getMessage());
                 Log::error('Error seeding frame', [
                     'frame' => $frameData['name'],
                     'error' => $e->getMessage(),
@@ -126,16 +126,16 @@ class DefaultFrameSeeder extends Seeder
             }
         }
 
-        $this->command->info("\n📊 Seeding Summary:");
-        $this->command->info("  ✅ Success: {$successCount}");
-        $this->command->info("  ❌ Errors: {$errorCount}");
+        $this->command->info("\nSeeding Summary:");
+        $this->command->info("  Success: {$successCount}");
+        $this->command->info("  Errors: {$errorCount}");
         
         if ($successCount > 0) {
-            $this->command->info("\n🎉 Default frames seeded successfully!");
+            $this->command->info("\nDefault frames seeded successfully!");
         }
         
         if ($errorCount > 0) {
-            $this->command->warn("\n⚠️  Some frames could not be seeded. Check logs.");
+            $this->command->warn("\nSome frames could not be seeded. Check logs.");
         }
     }
 }

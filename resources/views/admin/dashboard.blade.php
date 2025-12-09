@@ -67,6 +67,147 @@
     </div>
 </div>
 
+{{-- ✅ BARU: Frame Usage Statistics --}}
+<div class="card mb-4">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-bar-chart-fill me-2"></i> Statistik Penggunaan Frame</h5>
+    </div>
+    <div class="card-body">
+        {{-- Frame Stats Summary --}}
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="p-3 bg-primary bg-opacity-10 rounded">
+                    <div class="text-primary fw-bold">Total Frame</div>
+                    <h3 class="mb-0 text-primary">{{ $frameStatsSummary['total_frames'] }}</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 bg-success bg-opacity-10 rounded">
+                    <div class="text-success fw-bold">Frame Aktif</div>
+                    <h3 class="mb-0 text-success">{{ $frameStatsSummary['active_frames'] }}</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 bg-warning bg-opacity-10 rounded">
+                    <div class="text-warning fw-bold">Frame Custom</div>
+                    <h3 class="mb-0 text-warning">{{ $frameStatsSummary['custom_frames'] }}</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 bg-danger bg-opacity-10 rounded">
+                    <div class="text-danger fw-bold">Tidak Digunakan</div>
+                    <h3 class="mb-0 text-danger">{{ $frameStatsSummary['unused_frames'] }}</h3>
+                </div>
+            </div>
+        </div>
+
+        {{-- Top 5 Most Used Frames --}}
+        <div class="mb-4">
+            <h6 class="fw-bold mb-3">Top 5 Frame Paling Populer</h6>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="50">Rank</th>
+                            <th>Frame</th>
+                            <th>Tipe</th>
+                            <th>Warna</th>
+                            <th class="text-center">Photos</th>
+                            <th class="text-center">Digunakan</th>
+                            <th class="text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($topFrames as $index => $frame)
+                            <tr>
+                                <td class="text-center">
+                                    <span class="fs-5">
+                                        @if($index === 0) <strong>1</strong>
+                                        @elseif($index === 1) <strong>2</strong>
+                                        @elseif($index === 2) <strong>3</strong>
+                                        @else <strong>{{ $index + 1 }}</strong>
+                                        @endif
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        @if($frame->image_path && Storage::disk('public')->exists($frame->image_path))
+                                            <img src="{{ Storage::url($frame->image_path) }}" 
+                                                 alt="{{ $frame->name }}"
+                                                 class="me-2 rounded"
+                                                 style="width: 40px; height: 40px; object-fit: cover;">
+                                        @endif
+                                        <div>
+                                            <div class="fw-semibold">{{ $frame->name }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if($frame->is_default)
+                                        <span class="badge bg-primary">Default</span>
+                                    @else
+                                        <span class="badge bg-secondary">Custom</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <span class="badge" style="background-color: {{ $frame->color_code == 'brown' ? '#6B4423' : ($frame->color_code == 'cream' ? '#CBA991' : '#e9ecef') }}; color: {{ $frame->color_code == 'white' ? '#000' : '#fff' }};">
+                                        {{ ucfirst($frame->color_code) }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-info">{{ $frame->photo_count }}</span>
+                                </td>
+                                <td class="text-center">
+                                    <strong class="text-success">{{ $frame->usage_count }}</strong>
+                                    <small class="text-muted">kali</small>
+                                </td>
+                                <td class="text-center">
+                                    @if($frame->is_active)
+                                        <span class="badge bg-success">Aktif</span>
+                                    @else
+                                        <span class="badge bg-secondary">Nonaktif</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-3">
+                                    Belum ada data frame yang digunakan
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- Unused Frames --}}
+        @if($unusedFrames->count() > 0)
+            <div class="alert alert-warning">
+                <h6 class="alert-heading">Frame yang Belum Pernah Digunakan ({{ $unusedFrames->count() }})</h6>
+                <hr>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach($unusedFrames as $frame)
+                        <span class="badge bg-light text-dark border">
+                            {{ $frame->name }}
+                            @if(!$frame->is_active)
+                                <span class="text-danger">(Nonaktif)</span>
+                            @endif
+                            @if(!$frame->is_default)
+                                <span class="text-secondary">(Custom)</span>
+                            @endif
+                        </span>
+                    @endforeach
+                </div>
+                <hr>
+                <p class="mb-0 small">
+                    <strong>Saran:</strong> Pertimbangkan untuk menonaktifkan atau menghapus frame yang tidak pernah digunakan untuk merapikan koleksi frame.
+                </p>
+            </div>
+        @endif
+    </div>
+</div>
+
 <!-- Recent Activity -->
 <div class="row g-4">
     <!-- Recent Photo Strips -->
@@ -176,10 +317,21 @@
     background: linear-gradient(135deg, var(--primary), var(--accent));
     color: white;
     display: flex;
-    align-items: center;
+    align-items-center;
     justify-content: center;
     font-weight: bold;
     font-size: 1.2rem;
+}
+
+.stat-card {
+    border-left: 4px solid #007bff;
+    padding: 1.5rem;
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 </style>
 @endpush

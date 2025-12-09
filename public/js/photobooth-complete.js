@@ -50,7 +50,7 @@ class PhotoBoothApp {
      */
     loadFramesFromBackend() {
         if (window.availableFrames && window.availableFrames.length > 0) {
-            console.log('✅ Loading frames from backend:', window.availableFrames);
+            console.log('Loading frames from backend:', window.availableFrames);
             
             // Store frames grouped by photo count
             window.availableFrames.forEach(frame => {
@@ -60,9 +60,9 @@ class PhotoBoothApp {
                 this.backendFrames[frame.photo_count].push(frame);
             });
             
-            console.log('📦 Frames grouped by count:', this.backendFrames);
+            console.log('Frames grouped by count:', this.backendFrames);
         } else {
-            console.warn('⚠️ No frames loaded from backend, using fallback');
+            console.warn('No frames loaded from backend, using fallback');
             this.backendFrames = {};
         }
     }
@@ -73,7 +73,7 @@ class PhotoBoothApp {
     getFramePath() {
         // Priority 1: Use selected dynamic frame
         if (this.useDynamicFrames && this.selectedFramePath) {
-            console.log('✅ Using dynamic frame:', this.selectedFramePath);
+            console.log('Using dynamic frame:', this.selectedFramePath);
             return this.selectedFramePath;
         }
 
@@ -85,18 +85,18 @@ class PhotoBoothApp {
             const matchingFrame = frames.find(f => f.color_code === this.selectedColor);
             
             if (matchingFrame) {
-                console.log('✅ Using backend frame:', matchingFrame.image_path);
+                console.log('Using backend frame:', matchingFrame.image_path);
                 return matchingFrame.image_path;
             }
             
             // Fallback: use first frame
-            console.log('✅ Using first backend frame:', frames[0].image_path);
+            console.log('Using first backend frame:', frames[0].image_path);
             return frames[0].image_path;
         }
 
         // Priority 3: Fallback to old system
         const fallbackPath = `/storage/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
-        console.warn('⚠️ Using fallback frame:', fallbackPath);
+        console.warn('Using fallback frame:', fallbackPath);
         return fallbackPath;
     }
 
@@ -267,7 +267,7 @@ class PhotoBoothApp {
             saveBtn.style.display = 'none';
         }
         
-        console.log('✅ Strip state reset');
+        console.log('Strip state reset');
     }
 
     /**
@@ -281,7 +281,7 @@ class PhotoBoothApp {
         
         frameOptions.forEach((option, index) => {
             option.addEventListener('click', async () => {
-                console.log(`\n📦 Frame ${index + 1} clicked`);
+                console.log(`\nFrame ${index + 1} clicked`);
                 
                 document.querySelectorAll('.frame-option').forEach(opt => opt.classList.remove('active'));
                 option.classList.add('active');
@@ -318,7 +318,7 @@ class PhotoBoothApp {
             console.log('Auto-selecting first frame...');
             firstFrame.click();
         } else {
-            console.warn('⚠️ No frame options found!');
+            console.warn('No frame options found!');
         }
     }
 
@@ -327,26 +327,26 @@ class PhotoBoothApp {
      */
     async testFrameLoad(framePath) {
         try {
-            console.log(`🔍 Testing frame load: ${framePath}`);
+            console.log(`Testing frame load: ${framePath}`);
             
             const testImg = new Image();
             testImg.crossOrigin = 'anonymous';
             
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
-                    console.error('⏱️ Frame load timeout');
+                    console.error('Frame load timeout');
                     reject(new Error('Timeout'));
                 }, 5000);
                 
                 testImg.onload = () => {
                     clearTimeout(timeout);
-                    console.log('✅ Frame loaded successfully!');
+                    console.log('Frame loaded successfully!');
                     resolve(true);
                 };
                 
                 testImg.onerror = (error) => {
                     clearTimeout(timeout);
-                    console.error('❌ Frame load failed!');
+                    console.error('Frame load failed!');
                     console.error('Path:', framePath);
                     
                     this.showFrameError(framePath, error);
@@ -364,7 +364,7 @@ class PhotoBoothApp {
      * ✅ NEW: Show user-friendly frame error
      */
     showFrameError(framePath, error) {
-        const errorMsg = `❌ Frame tidak dapat dimuat!\n\n` +
+        const errorMsg = `Frame tidak dapat dimuat!\n\n` +
                         `Path: ${framePath}\n\n` +
                         `Kemungkinan penyebab:\n` +
                         `1. File tidak ada di storage/app/public/frames/\n` +
@@ -580,7 +580,7 @@ class PhotoBoothApp {
             return;
         }
 
-        console.log('\n🎨 Creating and saving final strip...');
+        console.log('\nCreating and saving final strip...');
 
         try {
             const downloadBtn = document.getElementById('downloadBtn');
@@ -597,10 +597,10 @@ class PhotoBoothApp {
             await this.sendToServer(finalImageData, downloadBtn, originalDownloadText);
             
             this.isStripSaved = true;
-            console.log('✅ Strip saved successfully!');
+            console.log('Strip saved successfully!');
 
         } catch (error) {
-            console.error('❌ Error composing strip:', error);
+            console.error('Error composing strip:', error);
             alert('Terjadi kesalahan: ' + error.message);
             
             const downloadBtn = document.getElementById('downloadBtn');
@@ -621,7 +621,7 @@ class PhotoBoothApp {
             return;
         }
 
-        console.log('\n🔄 Updating existing strip...');
+        console.log('\nUpdating existing strip...');
 
         try {
             const finalCanvas = await this.createFinalCanvasWithCustomFrame();
@@ -643,17 +643,17 @@ class PhotoBoothApp {
             const result = await response.json();
             
             if (result.success) {
-                console.log('✅ Strip updated successfully!');
+                console.log('Strip updated successfully!');
                 this.currentStripUrl = result.strip_url;
             }
 
         } catch (error) {
-            console.error('❌ Error updating strip:', error);
+            console.error('Error updating strip:', error);
         }
     }
 
     async sendToServer(finalImageData, downloadBtn, originalDownloadText) {
-        console.log('📤 Sending strip to server...');
+        console.log('Sending strip to server...');
         
         const response = await fetch('/photobooth/compose', {
             method: 'POST',
@@ -694,7 +694,7 @@ class PhotoBoothApp {
      * ✅ UPDATED: Create final canvas with improved frame loading
      */
     async createFinalCanvasWithCustomFrame() {
-        console.log('\n🎨 Creating final canvas...');
+        console.log('\nCreating final canvas...');
         
         const tempCanvas = document.createElement('canvas');
         const ctx = tempCanvas.getContext('2d');
@@ -713,42 +713,42 @@ class PhotoBoothApp {
         ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
         // Draw photos
-        console.log(`📸 Drawing ${this.photos.length} photos...`);
+        console.log(`Drawing ${this.photos.length} photos...`);
         for (let i = 0; i < this.photos.length; i++) {
             try {
                 const photoImg = await this.loadImage(this.photos[i]);
                 const area = config.photoAreas[i];
                 
                 if (!area) {
-                    console.warn(`⚠️ Photo area ${i} not found`);
+                    console.warn(`Photo area ${i} not found`);
                     continue;
                 }
                 
                 this.drawImageCover(ctx, photoImg, area.x, area.y, area.width, area.height);
-                console.log(`✅ Photo ${i + 1} drawn`);
+                console.log(`Photo ${i + 1} drawn`);
             } catch (error) {
-                console.error(`❌ Failed to draw photo ${i}:`, error);
+                console.error(`Failed to draw photo ${i}:`, error);
             }
         }
 
         // ✅ Get frame path
         const framePath = this.getFramePath();
-        console.log(`📥 Loading frame: ${framePath}`);
+        console.log(`Loading frame: ${framePath}`);
         
         try {
             const frameImg = await this.loadImage(framePath);
-            console.log('✅ Frame loaded');
+            console.log('Frame loaded');
             
             ctx.drawImage(frameImg, 0, 0, tempCanvas.width, tempCanvas.height);
-            console.log('✅ Frame drawn');
+            console.log('Frame drawn');
             
         } catch (error) {
-            console.error('❌ Frame load error:', error);
+            console.error('Frame load error:', error);
             this.showFrameError(framePath, error);
             throw error;
         }
 
-        console.log('✅ Final canvas complete!');
+        console.log('Final canvas complete!');
         return tempCanvas;
     }
 
@@ -815,10 +815,10 @@ class PhotoBoothApp {
             const result = await response.json();
             
             if (result.success) {
-                alert('✅ ' + result.message);
+                alert(result.message);
                 window.location.href = '/profile';
             } else {
-                alert('❌ ' + result.message);
+                alert(result.message);
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = originalText;
             }
@@ -893,51 +893,51 @@ class PhotoBoothApp {
      */
     loadImage(src) {
         return new Promise((resolve, reject) => {
-            console.log(`🔍 Loading: ${src}`);
+            console.log(`Loading: ${src}`);
             
             const img = new Image();
             img.crossOrigin = 'anonymous';
             
             const timeout = setTimeout(() => {
-                console.error(`⏱️ Timeout: ${src}`);
+                console.error(`Timeout: ${src}`);
                 reject(new Error('Timeout: ' + src));
             }, 10000);
             
             img.onload = () => {
                 clearTimeout(timeout);
-                console.log(`✅ Loaded: ${src}`);
+                console.log(`Loaded: ${src}`);
                 resolve(img);
             };
             
             img.onerror = (event) => {
                 clearTimeout(timeout);
-                console.error(`❌ Failed: ${src}`);
+                console.error(`Failed: ${src}`);
                 console.error('Error:', event);
                 
                 // ✅ Retry without cache buster
                 if (src.includes('?v=')) {
                     const cleanSrc = src.split('?')[0];
-                    console.log(`🔄 Retry: ${cleanSrc}`);
+                    console.log(`Retry: ${cleanSrc}`);
                     
                     const retryImg = new Image();
                     retryImg.crossOrigin = 'anonymous';
                     
                     retryImg.onload = () => {
-                        console.log(`✅ Retry success: ${cleanSrc}`);
+                        console.log(`Retry success: ${cleanSrc}`);
                         resolve(retryImg);
                     };
                     
                     retryImg.onerror = () => {
-                        console.error(`❌ Retry failed: ${cleanSrc}`);
+                        console.error(`Retry failed: ${cleanSrc}`);
                         
                         // Last try without CORS
                         const finalImg = new Image();
                         finalImg.onload = () => {
-                            console.log(`✅ Loaded (no CORS): ${cleanSrc}`);
+                            console.log(`Loaded (no CORS): ${cleanSrc}`);
                             resolve(finalImg);
                         };
                         finalImg.onerror = () => {
-                            console.error(`❌ All attempts failed`);
+                            console.error(`All attempts failed`);
                             reject(new Error('Failed: ' + src));
                         };
                         finalImg.src = cleanSrc;
@@ -967,9 +967,9 @@ class PhotoBoothApp {
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Initializing PhotoBoothApp...');
+    console.log('Initializing PhotoBoothApp...');
     window.photoboothApp = new PhotoBoothApp();
-    console.log('✅ PhotoBoothApp initialized');
+    console.log('PhotoBoothApp initialized');
 });
 
 // Global helpers

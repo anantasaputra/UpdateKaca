@@ -91,7 +91,7 @@ class FrameController extends Controller
             Log::info('Frame created successfully', ['frame_id' => $frame->id]);
 
             return redirect()->route('admin.frames.index')
-                ->with('success', '✅ Frame "' . $frame->name . '" berhasil ditambahkan! Sekarang tersedia di photobooth.');
+                ->with('success', 'Frame "' . $frame->name . '" berhasil ditambahkan! Sekarang tersedia di photobooth.');
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation failed', [
@@ -104,7 +104,7 @@ class FrameController extends Controller
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return back()->with('error', '❌ Error: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Error: ' . $e->getMessage())->withInput();
         }
     }
 
@@ -168,7 +168,7 @@ class FrameController extends Controller
             Log::info('Frame updated successfully', ['frame_id' => $frame->id]);
 
             return redirect()->route('admin.frames.index')
-                ->with('success', '✅ Frame "' . $frame->name . '" berhasil diupdate!');
+                ->with('success', 'Frame "' . $frame->name . '" berhasil diupdate!');
 
         } catch (\Exception $e) {
             Log::error('Error updating frame', [
@@ -176,7 +176,7 @@ class FrameController extends Controller
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return back()->with('error', '❌ Error: ' . $e->getMessage())->withInput();
+            return back()->with('error', 'Error: ' . $e->getMessage())->withInput();
         }
     }
 
@@ -201,7 +201,7 @@ class FrameController extends Controller
                     'usage_count' => $usageCount,
                 ]);
 
-                return back()->with('error', "❌ Cannot delete frame '{$frame->name}' because it is being used in {$usageCount} photo strips!");
+                return back()->with('error', "Cannot delete frame '{$frame->name}' because it is being used in {$usageCount} photo strips!");
             }
 
             // Store frame info before deletion
@@ -243,7 +243,7 @@ class FrameController extends Controller
             ]);
 
             return redirect()->route('admin.frames.index')
-                ->with('success', "✅ Frame '{$frameName}' berhasil dihapus!");
+                ->with('success', "Frame '{$frameName}' berhasil dihapus!");
 
         } catch (\Exception $e) {
             Log::error('Error deleting frame', [
@@ -254,7 +254,7 @@ class FrameController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
             
-            return back()->with('error', '❌ Error: ' . $e->getMessage());
+            return back()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
@@ -276,7 +276,7 @@ class FrameController extends Controller
                 'new_status' => $frame->is_active,
             ]);
 
-            return back()->with('success', "✅ Frame '{$frame->name}' berhasil {$status}.");
+            return back()->with('success', "Frame '{$frame->name}' berhasil {$status}.");
 
         } catch (\Exception $e) {
             Log::error('Error toggling frame', [
@@ -284,7 +284,7 @@ class FrameController extends Controller
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return back()->with('error', '❌ Error: ' . $e->getMessage());
+            return back()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
@@ -317,7 +317,7 @@ class FrameController extends Controller
             Log::warning('Frame force deleted', ['frame_name' => $frameName]);
 
             return redirect()->route('admin.frames.index')
-                ->with('warning', "⚠️ Frame '{$frameName}' telah dihapus secara paksa!");
+                ->with('warning', "Frame '{$frameName}' telah dihapus secara paksa!");
 
         } catch (\Exception $e) {
             Log::error('Error force deleting frame', [
@@ -325,7 +325,7 @@ class FrameController extends Controller
                 'message' => $e->getMessage(),
             ]);
             
-            return back()->with('error', '❌ Error: ' . $e->getMessage());
+            return back()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 }

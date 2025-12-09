@@ -60,13 +60,57 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
+        // BARU: Statistik Frame - Yang Paling Sering & Tidak Pernah Digunakan
+        $frameStats = Frame::leftJoin('photo_strips', 'frames.id', '=', 'photo_strips.frame_id')
+            ->select(
+                'frames.id',
+                'frames.name',
+                'frames.color_code',
+                'frames.photo_count',
+                'frames.is_active',
+                'frames.is_default',
+                'frames.image_path',
+                DB::raw('COUNT(photo_strips.id) as usage_count')
+            )
+            ->groupBy(
+                'frames.id',
+                'frames.name',
+                'frames.color_code',
+                'frames.photo_count',
+                'frames.is_active',
+                'frames.is_default',
+                'frames.image_path'
+            )
+            ->orderBy('usage_count', 'desc')
+            ->get();
+
+        // BARU: Top 5 Frame Paling Populer
+        $topFrames = $frameStats->take(5);
+
+        // BARU: Frame yang Tidak Pernah Digunakan
+        $unusedFrames = $frameStats->where('usage_count', 0);
+
+        // BARU: Frame Statistics Summary
+        $frameStatsSummary = [
+            'total_frames' => $frameStats->count(),
+            'active_frames' => $frameStats->where('is_active', true)->count(),
+            'inactive_frames' => $frameStats->where('is_active', false)->count(),
+            'default_frames' => $frameStats->where('is_default', true)->count(),
+            'custom_frames' => $frameStats->where('is_default', false)->count(),
+            'unused_frames' => $unusedFrames->count(),
+            'most_used_frame' => $frameStats->first(),
+        ];
+
         return view('admin.dashboard', compact(
             'stats',
             'recentStrips',
             'recentUsers',
             'stripsByCount',
             'monthlyStats',
-            'topUsers'
+            'topUsers',
+            'topFrames',           // BARU
+            'unusedFrames',        // BARU
+            'frameStatsSummary'    // BARU
         ));
     }
 }

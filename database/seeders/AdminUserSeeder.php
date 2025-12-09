@@ -32,7 +32,7 @@ class AdminUserSeeder extends Seeder
             'email_verified_at' => now(),
         ]);
 
-        $this->command->info('✅ Admin user created successfully!');
+        $this->command->info('Admin user created successfully!');
         $this->command->line('');
         $this->command->line('Login Credentials:');
         $this->command->line('Email: admin@bingkiskaca.com');
