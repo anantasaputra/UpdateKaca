@@ -29,6 +29,14 @@
                             <option value="4" selected>4 Foto</option>
                         </select>
                     </div>
+                                        <!-- ✅ NEW: Strip Mode Selection -->
+                    <div class="control-group">
+                        <label>Mode Strip:</label>
+                        <select id="stripModeSelect" class="control-select">
+                            <option value="single" selected>Single Strip</option>
+                            <option value="double">Double Strip</option>
+                        </select>
+                    </div>
 
                     <!-- Timer -->
                     <div class="control-group">
@@ -148,11 +156,13 @@
                                         @endphp
                                         
                                         <div class="frame-option {{ $loop->first && $photoCount == 4 ? 'active' : '' }}" 
-                                             data-frame-id="{{ $frame->id }}"
-                                             data-frame-path="{{ $frameDataPath ?? asset('images/placeholder-frame.png') }}"
-                                             data-color="{{ $frame->color_code }}"
-                                             data-photo-count="{{ $frame->photo_count }}"
-                                             title="{{ $frame->name }}">
+                                            data-frame-id="{{ $frame->id }}"
+                                            data-frame-path="{{ $frameDataPath ?? asset('images/placeholder-frame.png') }}"
+                                            data-color="{{ $frame->color_code }}"
+                                            data-photo-count="{{ $frame->photo_count }}"
+                                            data-is-double="{{ $frame->is_double_strip ? 'true' : 'false' }}"
+                                            data-strip-mode="{{ $frame->is_double_strip ? 'double' : 'single' }}"
+                                            title="{{ $frame->name }}">
                                             
                                             <div class="frame-preview-thumb">
                                                 @if($frameUrl)
@@ -171,6 +181,10 @@
                                             
                                             <div class="frame-info">
                                                 <span class="frame-name">{{ Str::limit($frame->name, 15) }}</span>
+                                                {{-- ✅ NEW: Badge untuk double strip --}}
+                                                @if($frame->is_double_strip)
+                                                    <span class="frame-mode-badge">Double</span>
+                                                @endif
                                                 <span class="frame-color-badge" 
                                                       style="background: {{ $frame->color_code == 'brown' ? '#6B4423' : ($frame->color_code == 'cream' ? '#CBA991' : '#fff') }}; 
                                                              color: {{ $frame->color_code == 'white' ? '#000' : '#fff' }}; 
@@ -883,6 +897,17 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(82, 37, 4, 0.3);
 }
+/* ✅ NEW: Badge untuk mode double strip */
+.frame-mode-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    background: #dc3545;
+    color: white;
+    margin: 0 2px;
+}
 
 .character-right-container {
     display: flex;
@@ -1170,6 +1195,9 @@ window.hasFramesInDB = {{ isset($framesByCount) && $framesByCount->isNotEmpty() 
 // Global config
 window.csrfToken = '{{ csrf_token() }}';
 window.isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
+
+// ✅ NEW: Track strip mode
+window.stripMode = 'single'; // default: single
 
 // Debug log
 console.log('Backend data loaded:', {

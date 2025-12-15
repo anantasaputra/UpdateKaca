@@ -28,7 +28,11 @@ class PhotoboothController extends Controller
             ->get();
 
         // Group by photo count untuk display
-        $framesByCount = $frames->groupBy('photo_count');
+       $framesByCount = $frames->groupBy('photo_count');
+
+        // TAMBAHKAN baris ini:
+        $singleFrames = $frames->where('is_double_strip', false)->groupBy('photo_count');
+        $doubleFrames = $frames->where('is_double_strip', true)->groupBy('photo_count');
 
         // ✅ FIXED: Generate frame URLs dengan multiple fallback
         $framesJson = $frames->map(function($frame) {
@@ -70,6 +74,7 @@ class PhotoboothController extends Controller
                 'color_code' => $frame->color_code,
                 'image_path' => $imageUrl, // ✅ Validated URL
                 'is_default' => $frame->is_default,
+                'is_double_strip' => $frame->is_double_strip, // ✅ TAMBAHKAN INI
             ];
         });
 
@@ -81,7 +86,14 @@ class PhotoboothController extends Controller
             'frames_json_count' => $framesJson->count(),
         ]);
 
-        return view('photobooth', compact('framesByCount', 'framesJson'));
+        // Di sekitar baris 75, UPDATE menjadi:
+    return view('photobooth', compact(
+    'framesByCount', 
+    'framesJson',
+    'singleFrames',  // ✅ TAMBAHKAN INI
+    'doubleFrames'   // ✅ TAMBAHKAN INI
+));
+
     }
 
     /**
@@ -162,6 +174,7 @@ class PhotoboothController extends Controller
             'image' => 'required|string', // Single final canvas image
             'frame_id' => 'nullable|exists:frames,id',
             'photo_count' => 'required|integer|in:2,3,4',
+            'is_double_strip' => 'nullable|boolean', // ✅ TAMBAHKAN INI
         ]);
 
         try {
@@ -169,6 +182,7 @@ class PhotoboothController extends Controller
             $frameId = $request->input('frame_id');
             $photoCount = $request->input('photo_count');
             $userId = auth()->id();
+            $isDoubleStrip = $request->input('is_double_strip', false); // ✅ TAMBAHKAN INI
             $guestSessionId = $userId ? null : session()->getId();
 
             // ✅ PENTING: Cek apakah user/guest sudah punya strip yang belum disimpan
@@ -288,6 +302,7 @@ class PhotoboothController extends Controller
                 'photo_data' => ['final_canvas'], // Metadata
                 'final_image_path' => $stripPath,
                 'photo_count' => $photoCount,
+                'is_double_strip' => $isDoubleStrip, // ✅ TAMBAHKAN INI
                 'ip_address' => $request->ip(),
                 'is_saved' => false, // Default false
             ]);
@@ -330,6 +345,7 @@ class PhotoboothController extends Controller
             'image' => 'required|string',
             'frame_id' => 'nullable|exists:frames,id',
             'photo_count' => 'required|integer|in:2,3,4',
+            'is_double_strip' => 'nullable|boolean', // ✅ TAMBAHKAN INI
         ]);
 
         try {
@@ -386,6 +402,7 @@ class PhotoboothController extends Controller
                 'frame_id' => $request->input('frame_id'),
                 'final_image_path' => $stripPath,
                 'photo_count' => $request->input('photo_count'),
+                'is_double_strip' => $request->input('is_double_strip', false), // ✅ TAMBAHKAN 
             ]);
 
             Log::info('Photo strip updated', [

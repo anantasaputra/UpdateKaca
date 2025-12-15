@@ -16,6 +16,9 @@ class PhotoBoothApp {
         this.useDynamicFrames = window.hasFramesInDB || false;
         this.selectedFrameId = null;
         this.selectedFramePath = null;
+            // ✅ NEW: Strip mode (single or double)
+        this.stripMode = 'single'; // default
+
         
         // ✅ NEW: Backend frames data
         this.backendFrames = {};
@@ -44,7 +47,20 @@ class PhotoBoothApp {
 
         this.init();
     }
+    // ✅ NEW: sync pilihan frame dari DOM ke state
+    updateSelectedFrameFromActive() {
+        if (!this.useDynamicFrames) return;
 
+        const active = document.querySelector('.frame-option.active');
+        if (active) {
+            this.selectedFrameId = active.dataset.frameId || null;
+            this.selectedFramePath = active.dataset.framePath || null;
+            console.log('Synced selected frame from DOM:', {
+                id: this.selectedFrameId,
+                path: this.selectedFramePath
+            });
+        }
+    }
     /**
      * ✅ NEW: Load frames from backend
      */
@@ -70,69 +86,126 @@ class PhotoBoothApp {
     /**
      * ✅ NEW: Get frame path with priority system
      */
-    getFramePath() {
-        // Priority 1: Use selected dynamic frame
-        if (this.useDynamicFrames && this.selectedFramePath) {
-            console.log('Using dynamic frame:', this.selectedFramePath);
-            return this.selectedFramePath;
-        }
-
-        // Priority 2: Use backend frame
-        if (this.backendFrames && this.backendFrames[this.currentPhotoCount]) {
-            const frames = this.backendFrames[this.currentPhotoCount];
-            
-            // Find frame matching color
-            const matchingFrame = frames.find(f => f.color_code === this.selectedColor);
-            
-            if (matchingFrame) {
-                console.log('Using backend frame:', matchingFrame.image_path);
-                return matchingFrame.image_path;
+        getFramePath() {
+            // 1) Selalu utamakan frame yang sedang dipilih di UI
+            if (this.useDynamicFrames && this.selectedFramePath) {
+                console.log('Using selected frame path:', this.selectedFramePath);
+                return this.selectedFramePath;
             }
-            
-            // Fallback: use first frame
-            console.log('Using first backend frame:', frames[0].image_path);
-            return frames[0].image_path;
+
+            // 2) Kalau belum ada yang dipilih tapi data backend ada, pilih yang cocok dengan mode & photo_count
+            if (this.backendFrames && this.backendFrames[this.currentPhotoCount]) {
+                const frames = this.backendFrames[this.currentPhotoCount];
+
+                // Cocokkan juga dengan stripMode
+                const targetMode = this.stripMode === 'double' ? true : false;
+                const matchingFrame = frames.find(f => f.is_double_strip === targetMode);
+
+                if (matchingFrame) {
+                    console.log('Using matching backend frame:', matchingFrame.image_path);
+                    return matchingFrame.image_path;
+                }
+
+                // Fallback: pertama untuk photo_count ini
+                console.log('Using first backend frame for this count:', frames[0].image_path);
+                return frames[0].image_path;
+            }
+
+            // 3) Terakhir banget: sistem lama
+            const fallbackPath = `/storage/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
+            console.warn('Using legacy fallback frame:', fallbackPath);
+            return fallbackPath;
         }
 
-        // Priority 3: Fallback to old system
-        const fallbackPath = `/storage/frames/4R_${this.selectedColor}${this.currentPhotoCount}.png`;
-        console.warn('Using fallback frame:', fallbackPath);
-        return fallbackPath;
-    }
 
     // Frame configurations
-    getFrameConfigs() {
-        return {
-            2: {
-                frameSize: { width: 1200, height: 1800 },
-                photoAreas: [
-                    { x: 70, y: 60, width: 1050, height: 735 },
-                    { x: 70, y: 805, width: 1050, height: 735 }
-                ]
-            },
-            3: {
-                frameSize: { width: 1200, height: 1800 },
-                photoAreas: [
-                    { x: 70, y: 60, width: 520, height: 765 },
-                    { x: 610, y: 60, width: 520, height: 765 },
-                    { x: 70, y: 805, width: 1050, height: 735 }
-                ]
-            },
-            4: {
-                frameSize: { width: 1200, height: 1800 },
-                photoAreas: [
-                    { x: 70, y: 60, width: 520, height: 765 },
-                    { x: 610, y: 60, width: 520, height: 765 },
-                    { x: 70, y: 805, width: 520, height: 765 },
-                    { x: 610, y: 805, width: 520, height: 765 }
-                ]
-            }
-        };
-    }
+        getFrameConfigs() {
+            // ✅ Single mode configs (existing)
+            const singleConfigs = {
+                2: {
+                    frameSize: { width: 1200, height: 1800 },
+                    photoAreas: [
+                        { x: 70, y: 60, width: 1050, height: 735 },
+                        { x: 70, y: 805, width: 1050, height: 735 }
+                    ]
+                },
+                3: {
+                    frameSize: { width: 1200, height: 1800 },
+                    photoAreas: [
+                        { x: 70, y: 60, width: 520, height: 765 },
+                        { x: 610, y: 60, width: 520, height: 765 },
+                        { x: 70, y: 805, width: 1050, height: 735 }
+                    ]
+                },
+                4: {
+                    frameSize: { width: 1200, height: 1800 },
+                    photoAreas: [
+                        { x: 70, y: 60, width: 520, height: 765 },
+                        { x: 610, y: 60, width: 520, height: 765 },
+                        { x: 70, y: 805, width: 520, height: 765 },
+                        { x: 610, y: 805, width: 520, height: 765 }
+                    ]
+                }
+            };
+
+            // ✅ NEW: Double mode configs
+            // ✅ UPDATED: Double mode configs (berdasarkan frame asli)
+            const doubleConfigs = {
+                2: {
+                    frameSize: { width: 1205, height: 1795 },
+                    photoAreas: [
+                        // Kolom KIRI
+                        { x: 45, y: 120, width: 485, height: 650 },   // Foto 1 (kiri atas)
+                        { x: 45, y: 820, width: 485, height: 650 },   // Foto 2 (kiri bawah)
+                        // Kolom KANAN (duplicate)
+                        { x: 635, y: 120, width: 485, height: 650 },  // Foto 1 duplicate (kanan atas)
+                        { x: 635, y: 820, width: 485, height: 650 },  // Foto 2 duplicate (kanan bawah)
+                    ]
+                },
+                3: {
+                    frameSize: { width: 1205, height: 1795 },
+                    photoAreas: [
+                        // Kolom KIRI (3 foto)
+                        { x: 85, y: 120, width: 485, height: 420 },   // Foto 1 (kiri atas)
+                        { x: 85, y: 585, width: 485, height: 420 },   // Foto 2 (kiri tengah)
+                        { x: 85, y: 1050, width: 485, height: 420 },  // Foto 3 (kiri bawah)
+                        // Kolom KANAN (duplicate)
+                        { x: 635, y: 120, width: 485, height: 420 },  // Foto 1 duplicate
+                        { x: 635, y: 585, width: 485, height: 420 },  // Foto 2 duplicate
+                        { x: 635, y: 1050, width: 485, height: 420 }, // Foto 3 duplicate
+                    ]
+                },
+                4: {
+                    frameSize: { width: 1205, height: 1795 },
+                    photoAreas: [
+                        // Kolom KIRI (4 foto)
+                        { x: 85, y: 110, width: 485, height: 310 },    // Foto 1 (kiri atas)
+                        { x: 85, y: 470, width: 485, height: 310 },   // Foto 2
+                        { x: 85, y: 820, width: 485, height: 310 },   // Foto 3
+                        { x: 85, y: 1170, width: 485, height: 310 },  // Foto 4 (kiri bawah)
+                        // Kolom KANAN (duplicate)
+                        { x: 635, y: 110, width: 485, height: 310 },   // Foto 1 duplicate
+                        { x: 635, y: 475, width: 485, height: 310 },  // Foto 2 duplicate
+                        { x: 635, y: 820, width: 485, height: 310 },  // Foto 3 duplicate
+                        { x: 635, y: 1170, width: 485, height: 310 }, // Foto 4 duplicate
+                    ]
+                }
+            };
+
+            // ✅ Return config berdasarkan strip mode
+            return this.stripMode === 'double' ? doubleConfigs : singleConfigs;
+        }
+
 
     init() {
         this.setupCameraList();
         this.setupEventListeners();
+        //     if (this.useDynamicFrames) {
+        //     console.log('Applying initial frame filter...');
+        //     setTimeout(() => {
+        //         this.filterFramesByMode(this.stripMode);
+        //     }, 500); // Delay untuk pastikan DOM sudah ready
+        // }
     }
 
     async setupCameraList() {
@@ -186,37 +259,57 @@ class PhotoBoothApp {
             this.currentCamera = e.target.value;
             this.startCamera();
         });
-
+        // Timer selection
+        const timerSelect = document.getElementById('timerSelect');
+        if (timerSelect) {
+            timerSelect.addEventListener('change', (e) => {
+                this.timerDuration = parseInt(e.target.value);
+                console.log('Timer changed to:', this.timerDuration);
+            });
+        }
         // Photo count selection
+      // Saat ganti jumlah foto
         document.getElementById('photoCountSelect').addEventListener('change', (e) => {
             this.currentPhotoCount = parseInt(e.target.value);
             this.frameType = `frame${this.currentPhotoCount}`;
-            
             this.resetStrip();
-            
+
             if (this.useDynamicFrames) {
                 document.querySelectorAll('.frame-group').forEach(group => {
                     const groupCount = parseInt(group.dataset.photoCount);
                     group.style.display = groupCount === this.currentPhotoCount ? 'block' : 'none';
                 });
-                
+
                 this.selectedFrameId = null;
                 this.selectedFramePath = null;
                 document.querySelectorAll('.frame-option').forEach(opt => opt.classList.remove('active'));
-                
-                const firstFrame = document.querySelector(`.frame-group[data-photo-count="${this.currentPhotoCount}"] .frame-option`);
-                if (firstFrame) {
-                    firstFrame.click();
-                }
+
+                this.filterFramesByMode(this.stripMode);
             }
-            
+
             this.updateProgress();
         });
 
-        // Timer selection
-        document.getElementById('timerSelect').addEventListener('change', (e) => {
-            this.timerDuration = parseInt(e.target.value);
+        // Saat ganti mode strip
+        document.getElementById('stripModeSelect').addEventListener('change', (e) => {
+            this.stripMode = e.target.value;
+            this.resetStrip();
+
+            if (this.useDynamicFrames) {
+                document.querySelectorAll('.frame-group').forEach(group => {
+                    const groupCount = parseInt(group.dataset.photoCount);
+                    group.style.display = groupCount === this.currentPhotoCount ? 'block' : 'none';
+                });
+
+                this.selectedFrameId = null;
+                this.selectedFramePath = null;
+                document.querySelectorAll('.frame-option').forEach(opt => opt.classList.remove('active'));
+
+                this.filterFramesByMode(this.stripMode);
+            }
         });
+
+
 
         // Start photo button
         document.getElementById('startPhotoBtn').addEventListener('click', () => {
@@ -313,14 +406,83 @@ class PhotoBoothApp {
             });
         });
         
-        const firstFrame = document.querySelector('.frame-option');
-        if (firstFrame) {
-            console.log('Auto-selecting first frame...');
-            firstFrame.click();
-        } else {
-            console.warn('No frame options found!');
-        }
+        // const firstFrame = document.querySelector('.frame-option');
+        // if (firstFrame) {
+        //     console.log('Auto-selecting first frame...');
+        //     firstFrame.click();
+        // } else {
+        //     console.warn('No frame options found!');
+        // }
     }
+    /**
+     * ✅ NEW: Filter frames berdasarkan strip mode
+     */
+        filterFramesByMode(mode) {
+            console.log('Filtering frames by mode:', mode);
+            
+            if (!this.useDynamicFrames) {
+                console.log('Dynamic frames not used, skipping filter');
+                return;
+            }
+            
+            const frameOptions = document.querySelectorAll('.frame-option');
+            let firstVisible = null;
+            let visibleCount = 0;
+
+            frameOptions.forEach(frame => {
+                const rawMode = frame.getAttribute('data-strip-mode');
+                const frameMode = rawMode || 'single'; // fallback kalau null
+                const photoCount = frame.getAttribute('data-photo-count');
+                const selectedPhotoCount = this.currentPhotoCount.toString();
+
+                // Debug bantuan
+                console.log('Frame check:', {
+                    title: frame.title,
+                    frameMode,
+                    photoCount,
+                    selectedMode: mode,
+                    selectedPhotoCount
+                });
+
+                if (frameMode === mode && photoCount === selectedPhotoCount) {
+                    frame.style.display = 'block';
+                    visibleCount++;
+                    if (!firstVisible) {
+                        firstVisible = frame;
+                    }
+                } else {
+                    frame.style.display = 'none';
+                    frame.classList.remove('active');
+                }
+            });
+
+            // Kalau tidak ada satupun yang cocok, jangan kosongkan UI:
+            if (visibleCount === 0) {
+                console.warn('No frames matched filter, showing all for this photoCount');
+                frameOptions.forEach(frame => {
+                    const photoCount = frame.getAttribute('data-photo-count');
+                    const selectedPhotoCount = this.currentPhotoCount.toString();
+                    if (photoCount === selectedPhotoCount) {
+                        frame.style.display = 'block';
+                        if (!firstVisible) {
+                            firstVisible = frame;
+                        }
+                    }
+                });
+            }
+
+            if (firstVisible) {
+                console.log('Auto-selecting first visible frame:', firstVisible.title);
+                firstVisible.classList.add('active');
+
+                // Set state supaya getFramePath selalu pakai ini
+                this.selectedFrameId = firstVisible.dataset.frameId || null;
+                this.selectedFramePath = firstVisible.dataset.framePath || null;
+
+                // Panggil click supaya preview ikut update
+                firstVisible.click();
+            }
+        }
 
     /**
      * ✅ NEW: Test frame loading
@@ -574,6 +736,7 @@ class PhotoBoothApp {
             console.log('Strip already saved, skipping...');
             return;
         }
+  
 
         if (this.photos.length !== this.currentPhotoCount) {
             console.log(`Photos incomplete: ${this.photos.length}/${this.currentPhotoCount}`);
@@ -590,7 +753,7 @@ class PhotoBoothApp {
                 downloadBtn.disabled = true;
                 downloadBtn.innerHTML = 'Processing...';
             }
-
+            this.updateSelectedFrameFromActive(); 
             const finalCanvas = await this.createFinalCanvasWithCustomFrame();
             const finalImageData = finalCanvas.toDataURL('image/png');
             
@@ -620,10 +783,12 @@ class PhotoBoothApp {
             await this.composeAndSaveStrip();
             return;
         }
+        
 
         console.log('\nUpdating existing strip...');
 
         try {
+            this.updateSelectedFrameFromActive(); 
             const finalCanvas = await this.createFinalCanvasWithCustomFrame();
             const finalImageData = finalCanvas.toDataURL('image/png');
             
@@ -636,7 +801,9 @@ class PhotoBoothApp {
                 body: JSON.stringify({
                     image: finalImageData,
                     frame_id: this.useDynamicFrames ? this.selectedFrameId : null,
-                    photo_count: this.currentPhotoCount
+                    photo_count: this.currentPhotoCount,
+                    is_double_strip: this.stripMode === 'double' ,
+                    
                 })
             });
 
@@ -664,7 +831,8 @@ class PhotoBoothApp {
             body: JSON.stringify({
                 image: finalImageData,
                 frame_id: this.useDynamicFrames ? this.selectedFrameId : null,
-                photo_count: this.currentPhotoCount
+                photo_count: this.currentPhotoCount,
+                is_double_strip: this.stripMode === 'double' ,
             })
         });
 
@@ -713,23 +881,51 @@ class PhotoBoothApp {
         ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
         // Draw photos
-        console.log(`Drawing ${this.photos.length} photos...`);
-        for (let i = 0; i < this.photos.length; i++) {
-            try {
-                const photoImg = await this.loadImage(this.photos[i]);
-                const area = config.photoAreas[i];
-                
-                if (!area) {
-                    console.warn(`Photo area ${i} not found`);
-                    continue;
+        console.log(`Drawing ${this.photos.length} photos in ${this.stripMode} mode...`);
+
+        if (this.stripMode === 'double') {
+            // ✅ DOUBLE MODE: Draw foto di kiri, lalu duplicate di kanan
+            for (let i = 0; i < this.photos.length; i++) {
+                try {
+                    const photoImg = await this.loadImage(this.photos[i]);
+                    
+                    // Draw foto KIRI
+                    const leftArea = config.photoAreas[i];
+                    if (leftArea) {
+                        this.drawImageCover(ctx, photoImg, leftArea.x, leftArea.y, leftArea.width, leftArea.height);
+                        console.log(`Photo ${i + 1} (LEFT) drawn`);
+                    }
+                    
+                    // Draw foto KANAN (duplicate)
+                    const rightArea = config.photoAreas[this.photos.length + i];
+                    if (rightArea) {
+                        this.drawImageCover(ctx, photoImg, rightArea.x, rightArea.y, rightArea.width, rightArea.height);
+                        console.log(`Photo ${i + 1} (RIGHT) drawn`);
+                    }
+                } catch (error) {
+                    console.error(`Failed to draw photo ${i}:`, error);
                 }
-                
-                this.drawImageCover(ctx, photoImg, area.x, area.y, area.width, area.height);
-                console.log(`Photo ${i + 1} drawn`);
-            } catch (error) {
-                console.error(`Failed to draw photo ${i}:`, error);
+            }
+        } else {
+            // ✅ SINGLE MODE: Draw foto normal (existing code)
+            for (let i = 0; i < this.photos.length; i++) {
+                try {
+                    const photoImg = await this.loadImage(this.photos[i]);
+                    const area = config.photoAreas[i];
+                    
+                    if (!area) {
+                        console.warn(`Photo area ${i} not found`);
+                        continue;
+                    }
+                    
+                    this.drawImageCover(ctx, photoImg, area.x, area.y, area.width, area.height);
+                    console.log(`Photo ${i + 1} drawn`);
+                } catch (error) {
+                    console.error(`Failed to draw photo ${i}:`, error);
+                }
             }
         }
+
 
         // ✅ Get frame path
         const framePath = this.getFramePath();
@@ -839,11 +1035,12 @@ class PhotoBoothApp {
         document.getElementById('reviewModal').style.display = 'none';
     }
 
-    async updateStripPreview() {
+        async updateStripPreview() {
         const canvas = document.getElementById('stripCanvas');
         const ctx = canvas.getContext('2d');
 
-        const config = this.frameConfigs[this.currentPhotoCount];
+        // ✅ Get config based on current strip mode
+        const config = this.getFrameConfigs()[this.currentPhotoCount];
         
         if (!config) return;
 
@@ -854,20 +1051,53 @@ class PhotoBoothApp {
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        for (let i = 0; i < this.photos.length; i++) {
-            const photoImg = await this.loadImage(this.photos[i]);
-            const area = config.photoAreas[i];
-            
-            if (!area) continue;
-            
-            const scaledArea = {
-                x: area.x * scale,
-                y: area.y * scale,
-                width: area.width * scale,
-                height: area.height * scale
-            };
-            
-            this.drawImageCover(ctx, photoImg, scaledArea.x, scaledArea.y, scaledArea.width, scaledArea.height);
+        // ✅ Draw photos based on mode
+        if (this.stripMode === 'double') {
+            // DOUBLE MODE
+            for (let i = 0; i < this.photos.length; i++) {
+                const photoImg = await this.loadImage(this.photos[i]);
+                
+                // Foto KIRI
+                const leftArea = config.photoAreas[i];
+                if (leftArea) {
+                    const scaledLeft = {
+                        x: leftArea.x * scale,
+                        y: leftArea.y * scale,
+                        width: leftArea.width * scale,
+                        height: leftArea.height * scale
+                    };
+                    this.drawImageCover(ctx, photoImg, scaledLeft.x, scaledLeft.y, scaledLeft.width, scaledLeft.height);
+                }
+                
+                // Foto KANAN (duplicate)
+                const rightArea = config.photoAreas[this.photos.length + i];
+                if (rightArea) {
+                    const scaledRight = {
+                        x: rightArea.x * scale,
+                        y: rightArea.y * scale,
+                        width: rightArea.width * scale,
+                        height: rightArea.height * scale
+                    };
+                    this.drawImageCover(ctx, photoImg, scaledRight.x, scaledRight.y, scaledRight.width, scaledRight.height);
+                }
+            }
+        } else {
+            // SINGLE MODE (existing)
+            for (let i = 0; i < this.photos.length; i++) {
+                const photoImg = await this.loadImage(this.photos[i]);
+                const area = config.photoAreas[i];
+                
+                if (!area) continue;
+                
+                const scaledArea = {
+                    x: area.x * scale,
+                    y: area.y * scale,
+                    width: area.width * scale,
+                    height: area.height * scale
+                };
+                
+                this.drawImageCover(ctx, photoImg, scaledArea.x, scaledArea.y, scaledArea.width, scaledArea.height);
+            }
         }
 
         const framePath = this.getFramePath();
@@ -879,6 +1109,7 @@ class PhotoBoothApp {
             console.error('Error loading frame for preview:', error);
         }
     }
+
 
     async downloadPhotoStrip() {
         if (this.currentStripId) {
