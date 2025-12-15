@@ -200,12 +200,12 @@ class PhotoBoothApp {
     init() {
         this.setupCameraList();
         this.setupEventListeners();
-        //     if (this.useDynamicFrames) {
-        //     console.log('Applying initial frame filter...');
-        //     setTimeout(() => {
-        //         this.filterFramesByMode(this.stripMode);
-        //     }, 500); // Delay untuk pastikan DOM sudah ready
-        // }
+            if (this.useDynamicFrames) {
+            console.log('Applying initial frame filter...');
+            setTimeout(() => {
+                this.filterFramesByMode(this.stripMode);
+            }, 500); // Delay untuk pastikan DOM sudah ready
+        }
     }
 
     async setupCameraList() {
