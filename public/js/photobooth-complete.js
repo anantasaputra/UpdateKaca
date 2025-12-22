@@ -185,7 +185,7 @@ class PhotoBoothApp {
                         { x: 85, y: 1170, width: 485, height: 310 },  // Foto 4 (kiri bawah)
                         // Kolom KANAN (duplicate)
                         { x: 635, y: 110, width: 485, height: 310 },   // Foto 1 duplicate
-                        { x: 635, y: 475, width: 485, height: 310 },  // Foto 2 duplicate
+                        { x: 635, y: 470, width: 485, height: 310 },  // Foto 2 duplicate
                         { x: 635, y: 820, width: 485, height: 310 },  // Foto 3 duplicate
                         { x: 635, y: 1170, width: 485, height: 310 }, // Foto 4 duplicate
                     ]
@@ -867,7 +867,7 @@ class PhotoBoothApp {
         const tempCanvas = document.createElement('canvas');
         const ctx = tempCanvas.getContext('2d');
 
-        const config = this.frameConfigs[this.currentPhotoCount];
+        const config = this.getFrameConfigs()[this.currentPhotoCount];
         
         if (!config) {
             throw new Error(`Config not found for ${this.currentPhotoCount} photos`);

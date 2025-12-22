@@ -29,9 +29,9 @@ class FrameSeeder extends Seeder
         // ✅ CRITICAL: Ensure directories exist
         $this->ensureDirectoriesExist();
 
-        // ✅ UPDATED: Frame data sesuai dengan file yang Anda punya
+                // ✅ UPDATED: Frame data sesuai dengan file yang Anda punya
         $frames = [
-            // Brown frames (2, 3, 4 photos)
+            // Brown frames (2, 3, 4 photos) - SINGLE STRIP
             [
                 'name' => 'Brown Frame 2 Photos',
                 'description' => 'Classic brown frame for 2 photos',
@@ -69,7 +69,7 @@ class FrameSeeder extends Seeder
                 'usage_count' => 0,
             ],
 
-            // Cream frames (2, 3, 4 photos)
+            // Cream frames (2, 3, 4 photos) - SINGLE STRIP
             [
                 'name' => 'Cream Frame 2 Photos',
                 'description' => 'Elegant cream frame for 2 photos',
@@ -107,7 +107,7 @@ class FrameSeeder extends Seeder
                 'usage_count' => 0,
             ],
 
-            // ✅ White frames (uncomment jika sudah ada filenya)
+            // White frames (2, 3, 4 photos) - SINGLE STRIP
             [
                 'name' => 'White Frame 2 Photos',
                 'description' => 'Clean white frame for 2 photos',
@@ -144,7 +144,135 @@ class FrameSeeder extends Seeder
                 'uploaded_by' => $admin?->id,
                 'usage_count' => 0,
             ],
+
+            // ===============================================
+            // ✅ DOUBLE STRIP FRAMES
+            // ===============================================
+            
+            // Brown double strip frames
+            [
+                'name' => 'Brown Double Strip 2 Photos',
+                'description' => 'Brown double strip frame for 2 photos',
+                'category_id' => $classicCategory?->id,
+                'image_path' => 'frames/frame-brown-2strip-double.png',  // ✅ Path diperbaiki
+                'color_code' => 'brown',
+                'photo_count' => 2,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
+            [
+                'name' => 'Brown Double Strip 3 Photos',
+                'description' => 'Brown double strip frame for 3 photos',
+                'category_id' => $classicCategory?->id,
+                'image_path' => 'frames/frame-brown-3strip-double.png',
+                'color_code' => 'brown',
+                'photo_count' => 3,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
+            [
+                'name' => 'Brown Double Strip 4 Photos',
+                'description' => 'Brown double strip frame for 4 photos',
+                'category_id' => $classicCategory?->id,
+                'image_path' => 'frames/frame-brown-4strip-double.png',
+                'color_code' => 'brown',
+                'photo_count' => 4,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
+
+            // Cream double strip frames
+            [
+                'name' => 'Cream Double Strip 2 Photos',
+                'description' => 'Cream double strip frame for 2 photos',
+                'category_id' => $weddingCategory?->id,
+                'image_path' => 'frames/frame-cream-2strip-double.png',
+                'color_code' => 'cream',
+                'photo_count' => 2,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
+            [
+                'name' => 'Cream Double Strip 3 Photos',
+                'description' => 'Cream double strip frame for 3 photos',
+                'category_id' => $weddingCategory?->id,
+                'image_path' => 'frames/frame-cream-3strip-double.png',  // ✅ Typo diperbaiki (tadinya brown)
+                'color_code' => 'cream',
+                'photo_count' => 3,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
+            [
+                'name' => 'Cream Double Strip 4 Photos',
+                'description' => 'Cream double strip frame for 4 photos',
+                'category_id' => $weddingCategory?->id,
+                'image_path' => 'frames/frame-cream-4strip-double.png',
+                'color_code' => 'cream',
+                'photo_count' => 4,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
+
+            // White double strip frames
+            [
+                'name' => 'White Double Strip 2 Photos',
+                'description' => 'White double strip frame for 2 photos',
+                'category_id' => $classicCategory?->id,
+                'image_path' => 'frames/frame-white-2strip-double.png',
+                'color_code' => 'white',
+                'photo_count' => 2,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
+            [
+                'name' => 'White Double Strip 3 Photos',
+                'description' => 'White double strip frame for 3 photos',
+                'category_id' => $classicCategory?->id,
+                'image_path' => 'frames/frame-white-3strip-double.png',
+                'color_code' => 'white',
+                'photo_count' => 3,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
+            [
+                'name' => 'White Double Strip 4 Photos',
+                'description' => 'White double strip frame for 4 photos',
+                'category_id' => $classicCategory?->id,
+                'image_path' => 'frames/frame-white-4strip-double.png',
+                'color_code' => 'white',
+                'photo_count' => 4,
+                'is_double_strip' => true,
+                'is_default' => true,
+                'is_active' => true,
+                'uploaded_by' => $admin?->id,
+                'usage_count' => 0,
+            ],
         ];
+
 
         $this->command->info('Seeding frames...');
 
